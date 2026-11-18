@@ -9,7 +9,7 @@ export interface LoginCredentials {
   password: string;
 }
 
-// The login request itself is supplied by the caller, since the auth API is not decided yet.
+// The caller waits for authentication and token persistence before navigating.
 export function LoginScreen({
   onLogin,
   onSignup,
