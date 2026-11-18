@@ -20,7 +20,7 @@ function validate(loginId: string, password: string, confirm: string) {
   return errors;
 }
 
-// The signup request is supplied by the caller, since the auth API is not decided yet.
+// The caller submits registration and navigates only after success.
 export function SignupScreen({
   onSignup,
   onLogin,
