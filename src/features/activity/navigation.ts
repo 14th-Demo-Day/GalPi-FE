@@ -1,4 +1,5 @@
-let current = window.location.hash.slice(1) || "/activity";
+const DEFAULT_ROUTE = "/login";
+let current = window.location.hash.slice(1) || DEFAULT_ROUTE;
 let guard: ((continueNavigation: () => void) => void) | undefined;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((listener) => listener());
@@ -22,7 +23,7 @@ export function registerNavigationGuard(
   };
 }
 const handleHashChange = () => {
-  const target = window.location.hash.slice(1) || "/activity";
+  const target = window.location.hash.slice(1) || DEFAULT_ROUTE;
   if (target === current) return;
   if (guard) {
     window.history.replaceState(
