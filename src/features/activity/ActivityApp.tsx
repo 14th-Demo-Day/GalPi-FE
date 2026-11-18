@@ -1,8 +1,10 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { ActivityApi } from "./api";
 import type { Book, BookPage, BookPages } from "./types";
-import { Bookshelf, BookForm } from "./Books";
-import { PageEditor, PageList } from "./Pages";
+import { Bookshelf } from "./Bookshelf";
+import { BookForm } from "./BookForm";
+import { PageEditor } from "./PageEditor";
+import { PageList } from "./PageList";
 import { ExportScreen } from "./Export";
 import { Failure, Loading } from "./ui";
 import "./activity.css";
