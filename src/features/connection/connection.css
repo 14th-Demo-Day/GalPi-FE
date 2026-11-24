@@ -1,0 +1,530 @@
+.connection-screen {
+  padding: 49px 18px 154px;
+}
+.screen .connection-header h1 {
+  font-size: 28px;
+  line-height: 40px;
+}
+.connection-header p {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 18px;
+}
+.connection-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 15px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.screen .connection-tabs button {
+  min-height: 42px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.screen .connection-tabs button[aria-selected="true"] {
+  background: var(--green);
+  color: var(--surface);
+  font-weight: 500;
+}
+
+/* Fixed call to action above the bottom nav */
+.connection-cta {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(92px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 402px;
+  padding: 9px 18px 12px;
+  background: linear-gradient(transparent, var(--paper) 12px);
+}
+.screen .connection-cta .primary:disabled {
+  opacity: 1;
+  background: #ddd6ca;
+  color: var(--muted);
+}
+
+/* Empty and guide */
+.connection-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 92px;
+  text-align: center;
+}
+.connection-empty.saved-empty {
+  margin-top: 108px;
+}
+.screen .connection-empty h2 {
+  margin-top: 31px;
+  font-family: "Noto Serif KR Variable", serif;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 28px;
+}
+.connection-empty.saved-empty h2 {
+  margin-top: 0;
+}
+.screen .connection-empty p {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 18px;
+}
+.connection-guide {
+  margin-top: 68px;
+  padding: 15px 12px;
+  border-radius: 8px;
+  background: var(--sage);
+  text-align: center;
+}
+.connection-guide strong {
+  color: var(--green);
+  font-size: 15px;
+  font-weight: 500;
+}
+.screen .connection-guide p {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 19px;
+}
+
+/* Ready banner and selection */
+.connection-ready {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-top: 18px;
+  padding: 17px 18px;
+  border-radius: 8px;
+  background: var(--sage);
+}
+.connection-ready .open-book {
+  flex-shrink: 0;
+}
+.connection-ready strong {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.screen .connection-ready p {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.connection-select-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 22px;
+}
+.screen .connection-select-head h2 {
+  font-size: 15px;
+  line-height: 23px;
+}
+.connection-select-head span {
+  color: var(--green);
+  font-size: 14px;
+}
+.connection-books {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.screen .connection-book {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 111px;
+  padding: 8px 12px 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  text-align: left;
+}
+.screen .connection-book.selected {
+  border-color: var(--green);
+}
+.connection-book .check-mark {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.mini-cover {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex-shrink: 0;
+  width: 63px;
+  height: 97px;
+  padding: 18px 8px 10px 9px;
+  border-radius: 2px 4px 4px 2px;
+  box-shadow: 2px 2px 4px #29262022;
+}
+.mini-cover::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 4px;
+  width: 1px;
+  background: #ffffff55;
+}
+.mini-cover.green {
+  background: var(--green);
+  color: var(--surface);
+}
+.mini-cover.sage {
+  background: var(--sage);
+}
+.mini-cover.cream {
+  background: #efe8d9;
+}
+.mini-title {
+  font-family: "Noto Serif KR Variable", serif;
+  font-size: 11px;
+  line-height: 15px;
+  word-break: keep-all;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.mini-caption {
+  font-size: 8px;
+  line-height: 10px;
+}
+.connection-book-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+}
+.connection-book-info strong {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 21px;
+  overflow-wrap: anywhere;
+}
+.ready-pill {
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--sage);
+  color: var(--green);
+  font-size: 12px;
+  line-height: 17px;
+}
+.connection-note {
+  margin-top: 31px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+.screen .connection-note p + p {
+  margin-top: 18px;
+}
+.connection-shortage {
+  margin-top: 43px;
+}
+.screen .connection-shortage h2 {
+  font-size: 17px;
+  line-height: 25px;
+}
+.screen .connection-shortage p {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+.connection-shortage + .connection-books {
+  margin-top: 43px;
+}
+.connection-shortage ~ .connection-note p + p {
+  margin-top: 8px;
+}
+
+/* Saved sentences */
+.screen .saved-count {
+  margin-top: 28px;
+  font-size: 15px;
+  line-height: 23px;
+}
+.saved-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.saved-card {
+  padding: 15px 15px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.saved-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.screen .saved-sentence {
+  margin-top: 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line);
+  font-family: "Noto Serif KR Variable", serif;
+  font-size: 16px;
+  line-height: 26px;
+  word-break: keep-all;
+}
+.saved-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+.saved-tags span {
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--sage);
+  color: var(--green);
+  font-size: 12px;
+}
+.saved-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.screen .link-button {
+  min-height: 34px;
+  color: var(--green);
+  font-size: 14px;
+  font-weight: 500;
+}
+.screen .copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.screen .saved-footnote {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Sub screens */
+.connection-sub {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 18px 31px;
+}
+.connection-sub.with-action {
+  padding-bottom: 108px;
+}
+.sub-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-left: -9px;
+  min-height: 43px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.screen.connection-sub > h1 {
+  margin-top: 12px;
+  font-size: 25px;
+  line-height: 37px;
+}
+.connect-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: auto;
+  padding-top: 18px;
+}
+.connect-actions.floating {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 402px;
+  gap: 8px;
+  padding: 12px 18px max(25px, env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, var(--paper) 12px);
+}
+.screen .connect-actions .secondary {
+  min-height: 49px;
+  background: var(--surface);
+  color: var(--green);
+  font-size: 14px;
+}
+.connect-actions .primary.tall {
+  min-height: 49px;
+}
+.connect-progress,
+.connect-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: auto 0;
+  padding-top: 31px;
+  text-align: center;
+}
+.progress-ring {
+  width: 300px;
+  max-width: 76vw;
+  aspect-ratio: 1;
+  border: 6px solid var(--sage);
+  border-top-color: var(--green);
+  border-right-color: var(--green);
+  border-radius: 50%;
+  transform: rotate(-45deg);
+  animation: connect-spin 1.4s linear infinite;
+}
+@keyframes connect-spin {
+  to {
+    transform: rotate(315deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-ring {
+    animation-duration: 4s;
+  }
+}
+.screen .connect-progress h2 {
+  margin-top: 43px;
+  font-size: 17px;
+  line-height: 25px;
+}
+.screen .connect-failed h2 {
+  margin-top: 22px;
+  font-size: 15px;
+  line-height: 23px;
+}
+.screen .connect-progress p,
+.screen .connect-failed p {
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 21px;
+}
+.connection-sub.progress-screen .connect-actions,
+.connection-sub .connect-failed + .connect-actions {
+  margin-top: 0;
+}
+
+/* Result */
+.screen .result-subtitle {
+  margin-top: 4px;
+  color: var(--green);
+  font-size: 12px;
+}
+.result-card {
+  margin-top: 12px;
+  padding: 22px 18px 12px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.screen .result-sentence {
+  font-family: "Noto Serif KR Variable", serif;
+  font-size: 20px;
+  line-height: 32px;
+  word-break: keep-all;
+}
+.result-card .link-button {
+  margin-top: 4px;
+}
+.screen .result-hint {
+  margin-top: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 21px;
+}
+.evidence h2 {
+  margin-top: 18px;
+}
+.screen .evidence h2 {
+  font-size: 17px;
+  line-height: 25px;
+}
+.evidence ul {
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.evidence li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.evidence li:last-child {
+  border-bottom: 0;
+}
+.evidence strong {
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.evidence li > span {
+  margin-top: 10px;
+  font-size: 14px;
+}
+.evidence blockquote {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 23px;
+  word-break: keep-all;
+}
+.evidence .link-button {
+  margin-top: 8px;
+}
+
+/* Edit */
+.screen .edit-lead {
+  margin-top: 22px;
+  font-size: 13px;
+}
+.screen .edit-sub {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.edit-area {
+  width: 100%;
+  min-height: 197px;
+  margin-top: 28px;
+  padding: 15px;
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 23px;
+  resize: vertical;
+}
+.screen .edit-hint {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
