@@ -6,6 +6,8 @@ import { getRoute, go, subscribeRoute } from "./features/activity/navigation";
 import { LoginScreen } from "./features/onboarding/LoginScreen";
 import { SignupScreen } from "./features/onboarding/SignupScreen";
 import { RoadmapScreen } from "./features/roadmap/RoadmapScreen";
+import { ConnectionApp } from "./features/connection/ConnectionApp";
+import { connectionApiFor } from "./features/connection/api";
 import { integration } from "./integration";
 import { authSession } from "./features/onboarding/session";
 
@@ -44,8 +46,17 @@ export default function App({ api = serverApi }: { api?: ActivityApi }) {
   ) => {
     if (destination === "roadmap") go("/roadmap");
     else if (destination === "activity") go("/activity");
+    else if (destination === "connections") go("/connections");
     else integration.onNavigate?.(destination);
   };
+  if (path === "/connections" || path.startsWith("/connections/"))
+    return (
+      <ConnectionApp
+        api={connectionApiFor(api)}
+        path={path}
+        onNavigate={navigate}
+      />
+    );
   if (path === "/roadmap" || path === "/roadmap/quarterly")
     return (
       <RoadmapScreen
