@@ -8,6 +8,9 @@ import { SignupScreen } from "./features/onboarding/SignupScreen";
 import { RoadmapScreen } from "./features/roadmap/RoadmapScreen";
 import { ConnectionApp } from "./features/connection/ConnectionApp";
 import { connectionApiFor } from "./features/connection/api";
+import { SettingsApp } from "./features/settings/SettingsApp";
+import { createSettingsApi } from "./features/settings/settings";
+import type { SettingsApi } from "./features/settings/settings";
 import { integration } from "./integration";
 import { authSession } from "./features/onboarding/session";
 
@@ -16,9 +19,17 @@ const serverApi = createActivityApi({
   getAccessToken: () => integration.getAccessToken(),
   onUnauthorized: () => integration.onUnauthorized?.(),
 });
+const settingsApis = new WeakMap<ActivityApi, SettingsApi>();
+function settingsApiFor(api: ActivityApi) {
+  let value = settingsApis.get(api);
+  if (!value)
+    settingsApis.set(api, (value = createSettingsApi(api, connectionApiFor(api))));
+  return value;
+}
 export default function App({ api = serverApi }: { api?: ActivityApi }) {
   const path = useSyncExternalStore(subscribeRoute, getRoute);
   const token = useSyncExternalStore(authSession.subscribe, authSession.getAccessToken);
+  const loginId = useSyncExternalStore(authSession.subscribe, authSession.getLoginId);
   const needsLogin = api === serverApi && !token && path !== "/signup";
   if (path === "/login" || needsLogin)
     return (
@@ -26,6 +37,7 @@ export default function App({ api = serverApi }: { api?: ActivityApi }) {
         onLogin={async (credentials) => {
           if (api === serverApi)
             await authSession.login(credentials, integration.login);
+          else authSession.rememberLoginId(credentials.loginId);
           go("/activity");
         }}
         onSignup={() => go("/signup")}
@@ -47,8 +59,21 @@ export default function App({ api = serverApi }: { api?: ActivityApi }) {
     if (destination === "roadmap") go("/roadmap");
     else if (destination === "activity") go("/activity");
     else if (destination === "connections") go("/connections");
-    else integration.onNavigate?.(destination);
+    else go("/settings");
   };
+  if (path === "/settings" || path === "/settings/password")
+    return (
+      <SettingsApp
+        api={settingsApiFor(api)}
+        path={path}
+        loginId={loginId}
+        onBack={() => go("/activity")}
+        onLogout={() => {
+          authSession.clear();
+          go("/login");
+        }}
+      />
+    );
   if (path === "/connections" || path.startsWith("/connections/"))
     return (
       <ConnectionApp
