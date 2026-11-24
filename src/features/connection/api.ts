@@ -27,6 +27,7 @@ export interface ConnectionApi {
     input: Pick<SavedSentence, "sentence" | "evidence" | "isFirst">,
   ) => Promise<SavedSentence>;
   update: (id: number, sentence: string) => Promise<SavedSentence>;
+  clear: () => Promise<void>;
 }
 
 const wait = (ms: number, signal?: AbortSignal) =>
@@ -101,6 +102,9 @@ export function createLocalConnectionApi(api: ActivityApi): ConnectionApi {
       if (!item) throw new ConnectionError("SERVER", "문장을 찾지 못했어요.");
       item.sentence = sentence;
       return structuredClone(item);
+    },
+    async clear() {
+      saved = [];
     },
   };
 }

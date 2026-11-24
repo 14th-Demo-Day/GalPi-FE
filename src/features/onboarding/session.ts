@@ -8,14 +8,22 @@ export type Login = (credentials: Credentials) => Promise<{ accessToken: string 
 
 // New storage owned by this app; no pre-existing auth storage exists in this repo.
 const TOKEN_KEY = "galpi.accessToken";
+const LOGIN_ID_KEY = "galpi.loginId";
 type TokenStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 export function createAuthSession(storage: TokenStorage) {
   const listeners = new Set<() => void>();
   const notify = () => listeners.forEach((listener) => listener());
   const getAccessToken = () => storage.getItem(TOKEN_KEY);
+  const getLoginId = () => storage.getItem(LOGIN_ID_KEY);
   return {
     getAccessToken,
+    getLoginId,
+    // Shown on the settings screen; the login response carries no profile.
+    rememberLoginId(loginId: string) {
+      storage.setItem(LOGIN_ID_KEY, loginId);
+      notify();
+    },
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
@@ -28,10 +36,12 @@ export function createAuthSession(storage: TokenStorage) {
         throw new Error("로그인 응답에 인증 토큰이 없어요. 다시 시도해 주세요.");
       // Persist before notifying/rendering protected pages or resolving login.
       storage.setItem(TOKEN_KEY, result.accessToken);
+      storage.setItem(LOGIN_ID_KEY, credentials.loginId);
       notify();
     },
     clear() {
       storage.removeItem(TOKEN_KEY);
+      storage.removeItem(LOGIN_ID_KEY);
       notify();
     },
   };
