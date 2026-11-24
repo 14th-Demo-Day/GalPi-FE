@@ -1,7 +1,18 @@
-// Replace these callbacks when the teammate's login/router is connected.
-// This module deliberately does not pick a token-storage key or invent login routes.
+import { authSession } from "./features/onboarding/session";
+import { createAuthApi } from "./features/onboarding/api";
+import type { Credentials, Login } from "./features/onboarding/session";
+
+const authApi = createAuthApi(import.meta.env.VITE_API_BASE_URL || "");
+
 export const integration: {
-  getAccessToken: () => string | null | Promise<string | null>;
-  onUnauthorized?: () => void;
+  login: Login;
+  signup: (credentials: Credentials) => Promise<unknown>;
+  getAccessToken: () => string | null;
+  onUnauthorized: () => void;
   onNavigate?: (destination: "roadmap" | "connections" | "settings") => void;
-} = { getAccessToken: () => null };
+} = {
+  login: authApi.login,
+  signup: authApi.signup,
+  getAccessToken: authSession.getAccessToken,
+  onUnauthorized: authSession.clear,
+};
