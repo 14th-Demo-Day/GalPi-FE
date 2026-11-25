@@ -1,5 +1,10 @@
 import { previewContent } from "./content";
 import {
+  buildConnection,
+  buildEligibleBooks,
+} from "../features/connection/connection";
+import type { CreatedConnection } from "../features/connection/connection";
+import {
   buildBookDetail,
   buildQuarter,
   buildRoadmap,
@@ -48,10 +53,16 @@ function createPreviewApi(): ActivityApi {
     { input: ExportInput; bookId: number; started: number; job: ExportJob }
   >();
   const uploads = new Map<number, File>();
+  const connections = new Map<number, CreatedConnection>();
+  const savedConnections = new Map<
+    number,
+    { connectionId: number; finalSentence: string; savedAt: string }
+  >();
   let nextPage = 1,
     nextBook = 9,
     nextAttachment = 1,
-    nextExport = 1;
+    nextExport = 1,
+    nextConnection = 1;
   const now = () => new Date().toISOString();
   const clone = <T,>(value: T): T => structuredClone(value);
   const book = (id: number) => {
@@ -131,6 +142,83 @@ function createPreviewApi(): ActivityApi {
         todayString(),
       ) as T;
     }
+    if (path === "/api/connections" && init.method === "POST") {
+      // Mimic the AI wait; ?connect=fail-record / fail-server shows the failures.
+      await new Promise<void>((resolve, reject) => {
+        const t = setTimeout(resolve, 2400);
+        init.signal?.addEventListener("abort", () => {
+          clearTimeout(t);
+          reject(new DOMException("Aborted", "AbortError"));
+        });
+      });
+      const fail = new URLSearchParams(location.search).get("connect");
+      if (fail === "fail-record")
+        throw new ApiError("근거를 찾지 못했어요.", "INSUFFICIENT_EVIDENCE", 422);
+      if (fail === "fail-server")
+        throw new ApiError("AI 응답이 늦어지고 있어요.", "AI_GENERATION_FAILED", 502);
+      const { bookIds } = JSON.parse(String(init.body)) as { bookIds: number[] };
+      const created = buildConnection(books, pages, bookIds, nextConnection++);
+      connections.set(created.connectionId, created);
+      return clone(created) as T;
+    }
+    if (path.startsWith("/api/connections/saved?")) {
+      const q = new URLSearchParams(path.split("?")[1]);
+      const page = Number(q.get("page") ?? 0),
+        size = Number(q.get("size") ?? 20);
+      const all = [...savedConnections.values()].reverse();
+      return clone({
+        totalCount: all.length,
+        page,
+        size,
+        hasNext: (page + 1) * size < all.length,
+        items: all.slice(page * size, (page + 1) * size).map((r) => ({
+          ...r,
+          bookTitles: [
+            ...new Set(
+              connections.get(r.connectionId)!.evidences.map((e) => e.bookTitle),
+            ),
+          ],
+        })),
+      }) as T;
+    }
+    const save = path.match(/^\/api\/connections\/(\d+)\/save$/);
+    if (save && init.method === "POST") {
+      const found = connections.get(Number(save[1]));
+      if (!found)
+        throw new ApiError("연결을 찾을 수 없어요.", "CONNECTION_NOT_FOUND", 404);
+      if (savedConnections.has(found.connectionId))
+        throw new ApiError("이미 저장한 연결이에요.", "ALREADY_SAVED", 409);
+      const { finalSentence } = JSON.parse(String(init.body ?? "{}")) as {
+        finalSentence?: string;
+      };
+      const sentence = finalSentence ?? found.suggestedSentence;
+      if (!sentence.trim() || sentence.length > 300)
+        throw new ApiError("문장을 확인해 주세요.", "INVALID_SENTENCE", 400);
+      const record = {
+        connectionId: found.connectionId,
+        finalSentence: sentence,
+        savedAt: `${todayString()}T10:00:00`,
+      };
+      savedConnections.set(found.connectionId, record);
+      return clone(record) as T;
+    }
+    const connection = path.match(/^\/api\/connections\/(\d+)$/);
+    if (connection) {
+      const found = connections.get(Number(connection[1]));
+      if (!found)
+        throw new ApiError("연결을 찾을 수 없어요.", "CONNECTION_NOT_FOUND", 404);
+      return clone({
+        connectionId: found.connectionId,
+        suggestedSentence: found.suggestedSentence,
+        finalSentence:
+          savedConnections.get(found.connectionId)?.finalSentence ?? null,
+        saved: savedConnections.has(found.connectionId),
+        savedAt: savedConnections.get(found.connectionId)?.savedAt ?? null,
+        evidences: found.evidences,
+      }) as T;
+    }
+    if (path === "/api/connections/eligible-books")
+      return buildEligibleBooks(books, pages) as T;
     if (path === "/api/roadmap/years")
       return buildYears(books, new Date().getFullYear(), todayString()) as T;
     const detail = path.match(/^\/api\/roadmap\/books\/(\d+)$/);

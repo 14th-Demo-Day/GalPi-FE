@@ -69,9 +69,9 @@ export function createSettingsApi(
     async hasRecords(signal) {
       const [books, saved] = await Promise.all([
         activity.books("LATEST", signal),
-        connection.saved(signal),
+        connection.saved(0, signal),
       ]);
-      return books.length > 0 || saved.length > 0;
+      return books.length > 0 || saved.totalCount > 0;
     },
     async resetRecords() {
       // Deleting a book removes its pages and attachments on the server.
