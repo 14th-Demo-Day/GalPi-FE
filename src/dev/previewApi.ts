@@ -1,4 +1,11 @@
 import { previewContent } from "./content";
+import {
+  buildBookDetail,
+  buildQuarter,
+  buildRoadmap,
+  buildYears,
+  todayString,
+} from "../features/roadmap/roadmap";
 import type { ActivityApi } from "../features/activity/api";
 import { ApiError } from "../features/activity/api";
 import type {
@@ -112,6 +119,29 @@ function createPreviewApi(): ActivityApi {
     return clone(book(id));
   }
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const roadmap = path.match(/^\/api\/roadmap\?year=(\d{4})$/);
+    if (roadmap) return clone(buildRoadmap(books, Number(roadmap[1]))) as T;
+    if (path.startsWith("/api/roadmap/quarter?")) {
+      const q = new URLSearchParams(path.split("?")[1]);
+      return buildQuarter(
+        books,
+        Number(q.get("year")),
+        Number(q.get("quarter")) as 1 | 2 | 3 | 4,
+        q.get("keyword") ?? "",
+        todayString(),
+      ) as T;
+    }
+    if (path === "/api/roadmap/years")
+      return buildYears(books, new Date().getFullYear(), todayString()) as T;
+    const detail = path.match(/^\/api\/roadmap\/books\/(\d+)$/);
+    if (detail) {
+      const id = Number(detail[1]);
+      return buildBookDetail(
+        clone(book(id)),
+        pages.filter((p) => p.bookId === id).length,
+        todayString(),
+      ) as T;
+    }
     const create = path.match(/^\/api\/books\/(\d+)\/exports$/),
       action = path.match(/^\/api\/exports\/(\d+)(?:\/(cancel|retry))?$/);
     if (create) {

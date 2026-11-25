@@ -1,32 +1,44 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
+import { ApiError } from "../activity/api";
 import type { ActivityApi } from "../activity/api";
 import type { Book } from "../activity/types";
 import { dateText } from "../activity/types";
 import { BottomNav } from "../activity/BottomNav";
-import { Failure, Icon, IconButton, Loading, Modal } from "../activity/ui";
 import {
-  booksInQuarter,
-  booksInYear,
+  ErrorMessage,
+  Failure,
+  Icon,
+  IconButton,
+  Loading,
+  Modal,
+} from "../activity/ui";
+import {
   currentQuarter,
   isOngoing,
-  layoutBars,
   listPeriod,
+  placeBars,
   quarterMonths,
   quarters,
   roadmapRows,
-  searchBooks,
   todayString,
-  yearOptions,
+  buildYears,
 } from "./roadmap";
-import type { Quarter } from "./roadmap";
+import type {
+  Quarter,
+  QuarterBook,
+  RoadmapBookDetail,
+  RoadmapData,
+  RoadmapYears,
+} from "./roadmap";
 import "../activity/activity.css";
 import "./roadmap.css";
 
 type Tab = "roadmap" | "activity" | "connections";
 const PAGE_SIZE = 5;
 
-// Built from the activity book list; swap in a roadmap endpoint if the backend adds one.
+// Annual: GET /api/roadmap?year=. Quarterly: GET /api/roadmap/quarter.
+// Years: GET /api/roadmap/years. Detail: GET /api/roadmap/books/{id}.
 export function RoadmapScreen({
   api,
   view,
@@ -44,26 +56,22 @@ export function RoadmapScreen({
 }) {
   const today = todayString();
   const thisYear = new Date().getFullYear();
-  const [books, setBooks] = useState<Book[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [revision, setRevision] = useState(0);
   const [year, setYear] = useState(thisYear);
   const [quarter, setQuarter] = useState<Quarter>(currentQuarter());
   const [selected, setSelected] = useState<Book | null>(null);
+  const [years, setYears] = useState<RoadmapYears | null>(null);
 
   useEffect(() => {
     const c = new AbortController();
     api
-      .books("OLDEST", c.signal)
-      .then((data) => {
-        setBooks(data);
-        setError(null);
+      .request<RoadmapYears>("/api/roadmap/years", { signal: c.signal })
+      .then((d) => {
+        if (!c.signal.aborted) setYears(d);
       })
-      .catch((e) => {
-        if (!c.signal.aborted) setError(e);
-      });
+      // On failure the picker falls back to a locally built year range.
+      .catch(() => {});
     return () => c.abort();
-  }, [api, revision]);
+  }, [api]);
 
   return (
     <section className="screen roadmap-screen">
@@ -71,7 +79,7 @@ export function RoadmapScreen({
         <h1 className="roadmap-title">나의 로드맵</h1>
         <YearPicker
           year={year}
-          options={yearOptions(books ?? [], thisYear)}
+          options={(years ?? buildYears([], thisYear, today)).years}
           onChange={setYear}
         />
         <div className="roadmap-subtitle">
@@ -82,25 +90,21 @@ export function RoadmapScreen({
         </div>
       </header>
 
-      {error ? (
-        <Failure error={error} retry={() => setRevision((r) => r + 1)} />
-      ) : !books ? (
-        <Loading />
-      ) : view === "annual" ? (
+      {view === "annual" ? (
         <AnnualView
-          books={books}
+          key={year}
+          api={api}
+          hasRecords={years?.years.some((y) => y.hasRecord) ?? true}
           year={year}
-          today={today}
           highlight={year === thisYear ? currentQuarter() : null}
           onSelect={setSelected}
           onCreateBook={onCreateBook}
         />
       ) : (
         <QuarterlyView
-          books={books}
+          api={api}
           year={year}
           quarter={quarter}
-          today={today}
           onQuarter={setQuarter}
           onSelect={setSelected}
         />
@@ -135,7 +139,7 @@ function YearPicker({
   onChange,
 }: {
   year: number;
-  options: number[];
+  options: RoadmapYears["years"];
   onChange: (year: number) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -169,18 +173,26 @@ function YearPicker({
             onClick={() => setOpen(false)}
           />
           <div className="year-menu" role="group" aria-label="연도">
-            {options.map((y) => (
+            {options.map(({ year: y, hasRecord }) => (
               <button
                 type="button"
                 key={y}
                 aria-pressed={y === year}
                 className={y === year ? "active" : ""}
+                ref={y === year ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                 onClick={() => {
                   onChange(y);
                   setOpen(false);
                 }}
               >
-                {y}년
+                <span className="year-label">
+                  {y}년
+                  {hasRecord && (
+                    <span className="year-record">
+                      <span className="sr-only">, 기록 있음</span>
+                    </span>
+                  )}
+                </span>
                 {y === year && <Icon name="check" />}
               </button>
             ))}
@@ -192,24 +204,51 @@ function YearPicker({
 }
 
 function AnnualView({
-  books,
+  api,
+  hasRecords,
   year,
-  today,
   highlight,
   onSelect,
   onCreateBook,
 }: {
-  books: Book[];
+  api: ActivityApi;
+  hasRecords: boolean;
   year: number;
-  today: string;
   highlight: Quarter | null;
   onSelect: (book: Book) => void;
   onCreateBook: () => void;
 }) {
-  const inYear = booksInYear(books, year, today);
-  const rows = roadmapRows.filter(
-    (r) => r.category !== "ETC" || inYear.some((b) => b.category === "ETC"),
-  );
+  const [data, setData] = useState<RoadmapData | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const c = new AbortController();
+    api
+      .request<RoadmapData>(`/api/roadmap?year=${year}`, { signal: c.signal })
+      .then((d) => {
+        if (!c.signal.aborted) setData(d);
+      })
+      .catch((e) => {
+        if (!c.signal.aborted) setError(e);
+      });
+    return () => c.abort();
+  }, [api, year, revision]);
+
+  if (error)
+    return (
+      <Failure
+        error={error}
+        retry={() => {
+          setError(null);
+          setRevision((r) => r + 1);
+        }}
+      />
+    );
+  if (!data) return <Loading />;
+
+  const empty = data.rows.every((r) => !r.bars.length);
+  const label = (category: Book["category"]) =>
+    roadmapRows.find((r) => r.category === category)?.label ?? category;
   return (
     <>
       <div className="roadmap-grid" role="table" aria-label={`${year}년 로드맵`}>
@@ -228,50 +267,51 @@ function AnnualView({
             </div>
           ))}
         </div>
-        {rows.map(({ category, label }) => {
-          const { bars, lanes } = layoutBars(
-            inYear.filter((b) => b.category === category),
-            year,
-            today,
-          );
-          return (
-            <div className="grid-row" role="row" key={category}>
-              <div className="grid-label" role="rowheader">
-                {label}
-              </div>
-              {quarters.map((q) => (
-                <div key={q} className="grid-cell" aria-hidden="true" />
-              ))}
-              <div
-                className="grid-bars"
-                role="cell"
-                style={{ "--lanes": Math.max(lanes, 1) } as CSSProperties}
-              >
-                {bars.map(({ book, left, width, lane }) => (
-                  <button
-                    type="button"
-                    key={book.bookId}
-                    className="roadmap-bar"
-                    style={{
-                      left: `${left}%`,
-                      width: `${width}%`,
-                      top: `calc(${lane} * (var(--bar-height) + var(--bar-gap)))`,
-                    }}
-                    title={book.title}
-                    onClick={() => onSelect(book)}
-                  >
-                    {book.title}
-                  </button>
-                ))}
-              </div>
+        {data.rows.map((row) => (
+          <div className="grid-row" role="row" key={row.category}>
+            <div className="grid-label" role="rowheader">
+              {label(row.category)}
             </div>
-          );
-        })}
+            {quarters.map((q) => (
+              <div key={q} className="grid-cell" aria-hidden="true" />
+            ))}
+            <div
+              className="grid-bars"
+              role="cell"
+              style={{ "--lanes": Math.max(row.laneCount, 1) } as CSSProperties}
+            >
+              {placeBars(row, year).map(({ bar, left, width }) => (
+                <button
+                  type="button"
+                  key={bar.bookId}
+                  className="roadmap-bar"
+                  style={{
+                    left: `${left}%`,
+                    width: `${width}%`,
+                    top: `calc(${bar.lane} * (var(--bar-height) + var(--bar-gap)))`,
+                  }}
+                  title={bar.title}
+                  onClick={() =>
+                    onSelect({
+                      bookId: bar.bookId,
+                      title: bar.title,
+                      startDate: bar.startDate,
+                      endDate: bar.endDate,
+                      category: row.category,
+                    })
+                  }
+                >
+                  {bar.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
-      {!inYear.length && (
+      {empty && (
         <div className="roadmap-empty">
           <h2>
-            {books.length
+            {hasRecords
               ? `${year}년에 쌓인 활동이 없어요`
               : "아직 쌓인 활동이 없어요"}
           </h2>
@@ -281,7 +321,7 @@ function AnnualView({
             로드맵이 자동으로 채워져요.
           </p>
           <button type="button" className="primary tall" onClick={onCreateBook}>
-            {books.length ? "새 책 만들기" : "첫 책 만들기"}
+            {hasRecords ? "새 책 만들기" : "첫 책 만들기"}
           </button>
         </div>
       )}
@@ -289,33 +329,68 @@ function AnnualView({
   );
 }
 
+const SEARCH_DELAY = 300;
+
 function QuarterlyView({
-  books,
+  api,
   year,
   quarter,
-  today,
   onQuarter,
   onSelect,
 }: {
-  books: Book[];
+  api: ActivityApi;
   year: number;
   quarter: Quarter;
-  today: string;
   onQuarter: (q: Quarter) => void;
   onSelect: (book: Book) => void;
 }) {
   const [query, setQuery] = useState("");
-  // "More" paging restarts whenever the year, quarter or search changes.
-  const scope = `${year}-${quarter}-${query.trim()}`;
-  const [paging, setPaging] = useState({ scope, count: PAGE_SIZE });
-  const visible = paging.scope === scope ? paging.count : PAGE_SIZE;
-  const inQuarter = useMemo(
-    () => booksInQuarter(books, year, quarter, today),
-    [books, year, quarter, today],
-  );
-  const results = searchBooks(inQuarter, query);
-  const shown = results.slice(0, visible);
-  const more = Math.min(PAGE_SIZE, results.length - shown.length);
+  // The keyword sent to the server, updated after typing pauses.
+  const [keyword, setKeyword] = useState("");
+  const [result, setResult] = useState<{
+    key: string;
+    keyword: string;
+    books: QuarterBook[];
+  } | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [revision, setRevision] = useState(0);
+  const key = `${year}-${quarter}-${keyword}`;
+
+  useEffect(() => {
+    const t = setTimeout(() => setKeyword(query.trim()), SEARCH_DELAY);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  useEffect(() => {
+    const c = new AbortController();
+    const params = new URLSearchParams({
+      year: String(year),
+      quarter: String(quarter),
+    });
+    if (keyword) params.set("keyword", keyword);
+    api
+      .request<QuarterBook[]>(`/api/roadmap/quarter?${params}`, {
+        signal: c.signal,
+      })
+      .then((books) => {
+        if (c.signal.aborted) return;
+        setResult({ key: `${year}-${quarter}-${keyword}`, keyword, books });
+        setError(null);
+      })
+      .catch((e) => {
+        if (!c.signal.aborted) setError(e);
+      });
+    return () => c.abort();
+  }, [api, year, quarter, keyword, revision]);
+
+  // "More" paging restarts whenever the year, quarter or keyword changes.
+  const [paging, setPaging] = useState({ key, count: PAGE_SIZE });
+  const visible = paging.key === key ? paging.count : PAGE_SIZE;
+  // The previous list stays visible while the next one loads, to avoid flicker.
+  const books = result?.books ?? [];
+  const shown = books.slice(0, visible);
+  const more = Math.min(PAGE_SIZE, books.length - shown.length);
+
   return (
     <>
       <div className="quarter-tabs" role="group" aria-label="분기 선택">
@@ -351,12 +426,18 @@ function QuarterlyView({
           placeholder="기록 검색"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") setKeyword(query.trim());
+          }}
         />
         {query && (
           <IconButton
             name="close"
             label="검색어 지우기"
-            onClick={() => setQuery("")}
+            onClick={() => {
+              setQuery("");
+              setKeyword("");
+            }}
           />
         )}
       </div>
@@ -365,7 +446,17 @@ function QuarterlyView({
           <span>책 이름</span>
           <span>활동 기간</span>
         </div>
-        {results.length ? (
+        {error ? (
+          <Failure
+            error={error}
+            retry={() => {
+              setError(null);
+              setRevision((r) => r + 1);
+            }}
+          />
+        ) : !result ? (
+          <Loading />
+        ) : books.length ? (
           <ul>
             {shown.map((book) => {
               const { text, note } = listPeriod(book, year);
@@ -384,7 +475,7 @@ function QuarterlyView({
           </ul>
         ) : (
           <div className="roadmap-empty compact">
-            {query.trim() ? (
+            {result.keyword ? (
               <>
                 <h2>검색 결과가 없어요</h2>
                 <p>
@@ -401,13 +492,13 @@ function QuarterlyView({
             )}
           </div>
         )}
-        {more > 0 && (
+        {!error && more > 0 && (
           <button
             type="button"
             className="quarter-more"
-            onClick={() => setPaging({ scope, count: visible + PAGE_SIZE })}
+            onClick={() => setPaging({ key, count: visible + PAGE_SIZE })}
           >
-            {more}권 더 보기 · {shown.length}/{results.length}
+            {more}권 더 보기 · {shown.length}/{books.length}
           </button>
         )}
       </div>
@@ -428,43 +519,71 @@ function BookSheet({
   onClose: () => void;
   onOpen: () => void;
 }) {
-  const [pageCount, setPageCount] = useState(book.pageCount);
+  // Show what the list already knows at once, then fill in the detail.
+  const [detail, setDetail] = useState<RoadmapBookDetail | null>(null);
+  const [error, setError] = useState<unknown>(null);
   useEffect(() => {
-    if (book.pageCount !== undefined) return;
     const c = new AbortController();
     api
-      .book(book.bookId, c.signal)
-      .then((b) => setPageCount(b.pageCount))
-      .catch(() => {});
+      .request<RoadmapBookDetail>(`/api/roadmap/books/${book.bookId}`, {
+        signal: c.signal,
+      })
+      .then((d) => {
+        if (!c.signal.aborted) setDetail(d);
+      })
+      .catch((e) => {
+        if (!c.signal.aborted) setError(detailError(e));
+      });
     return () => c.abort();
-  }, [api, book]);
+  }, [api, book.bookId]);
+  const title = detail?.title ?? book.title;
+  const startDate = detail?.startDate ?? book.startDate;
+  const endDate = detail ? detail.endDate : book.endDate;
+  const ongoing = detail
+    ? detail.status === "IN_PROGRESS"
+    : isOngoing(book, today);
+  const missing =
+    error instanceof ApiError && (error.status === 404 || error.status === 403);
   return (
-    <Modal title={`선택한 책: ${book.title}`} onClose={onClose} sheet className="roadmap-sheet">
+    <Modal title={`선택한 책: ${title}`} onClose={onClose} sheet className="roadmap-sheet">
       <div className="sheet-handle" />
       <div className="roadmap-sheet-close">
         <IconButton name="close" label="닫기" onClick={onClose} />
       </div>
       <small className="roadmap-sheet-eyebrow">선택한 책</small>
       <div className="roadmap-sheet-title">
-        <h2>{book.title}</h2>
-        {isOngoing(book, today) && <span className="ongoing">진행 중</span>}
+        <h2>{title}</h2>
+        {ongoing && <span className="ongoing">진행 중</span>}
       </div>
       <dl className="roadmap-sheet-info">
         <div>
           <dt>활동 기간</dt>
           <dd>
-            {dateText(book.startDate)} ~{" "}
-            {book.endDate ? dateText(book.endDate) : "진행 중"}
+            {dateText(startDate)} ~ {endDate ? dateText(endDate) : "진행 중"}
           </dd>
         </div>
         <div>
           <dt>기록지</dt>
-          <dd>{pageCount === undefined ? "—" : `${pageCount}장`}</dd>
+          <dd>{detail ? `${detail.pageCount}장` : "—"}</dd>
         </div>
       </dl>
-      <button type="button" className="primary tall" onClick={onOpen}>
+      <ErrorMessage error={error} />
+      <button
+        type="button"
+        className="primary tall"
+        disabled={missing}
+        onClick={onOpen}
+      >
         책 속 기록 보기 →
       </button>
     </Modal>
   );
+}
+
+function detailError(e: unknown) {
+  if (e instanceof ApiError && e.status === 404)
+    return new ApiError("책을 찾을 수 없어요. 이미 삭제된 책일 수 있어요.", e.code, 404);
+  if (e instanceof ApiError && e.status === 403)
+    return new ApiError("이 책의 정보를 볼 수 없어요.", e.code, 403);
+  return e;
 }
