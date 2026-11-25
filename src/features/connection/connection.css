@@ -151,6 +151,9 @@
   background: var(--surface);
   text-align: left;
 }
+.screen .connection-book:disabled {
+  opacity: 0.55;
+}
 .screen .connection-book.selected {
   border-color: var(--green);
 }
@@ -176,6 +179,9 @@
   inset: 0 auto 0 4px;
   width: 1px;
   background: #ffffff55;
+}
+.mini-cover.dark {
+  color: var(--surface);
 }
 .mini-cover.green {
   background: var(--green);
@@ -316,6 +322,9 @@
   min-height: 34px;
   color: var(--muted);
   font-size: 13px;
+}
+.screen .saved-more {
+  margin-top: 8px;
 }
 .screen .saved-footnote {
   display: flex;
@@ -495,6 +504,11 @@
   font-size: 14px;
   line-height: 23px;
   word-break: keep-all;
+}
+.screen .evidence-missing {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
 }
 .evidence .link-button {
   margin-top: 8px;

@@ -3,16 +3,23 @@ import type { ReactNode } from "react";
 import { go } from "../activity/navigation";
 import { BottomNav } from "../activity/BottomNav";
 import { categories } from "../activity/types";
-import type { Book } from "../activity/types";
 import { ErrorMessage, Failure, Icon, IconButton, Loading } from "../activity/ui";
-import { ConnectionError } from "./api";
+import { ApiError } from "../activity/api";
+import { ConnectionError, STALE_SELECTION_CODES } from "./api";
 import type { ConnectionApi } from "./api";
-import { MIN_BOOKS, foundText, savedDate } from "./connection";
+import {
+  MAX_BOOKS,
+  MAX_SENTENCE_LENGTH,
+  MIN_BOOKS,
+  foundText,
+  isDarkColor,
+  savedDate,
+} from "./connection";
 import type {
-  Candidate,
+  EligibleBook,
   ConnectionResult,
   Evidence,
-  SavedSentence,
+  SavedPage,
 } from "./connection";
 import "../activity/activity.css";
 import "./connection.css";
@@ -33,10 +40,13 @@ export function ConnectionApp({
   const [booksError, setBooksError] = useState<unknown>(null);
   const [booksRevision, setBooksRevision] = useState(0);
   const [selected, setSelected] = useState<number[]>([]);
-  const [saved, setSaved] = useState<SavedSentence[] | null>(null);
+  const [saved, setSaved] = useState<SavedPage | null>(null);
   const [savedError, setSavedError] = useState<unknown>(null);
   const [savedRevision, setSavedRevision] = useState(0);
   const [result, setResult] = useState<ConnectionResult | null>(null);
+  // Load errors are kept per connection, so another item can still load.
+  const [loadError, setLoadError] = useState<{ id: number; error: unknown } | null>(null);
+  const [resultRevision, setResultRevision] = useState(0);
   const [failure, setFailure] = useState<ConnectionError["kind"] | null>(null);
   const [running, setRunning] = useState(false);
   const job = useRef<AbortController | null>(null);
@@ -49,7 +59,7 @@ export function ConnectionApp({
         setBooks(data);
         setBooksError(null);
         // Start with the two most recent ready books selected, as in Figma.
-        setSelected(data.candidates.slice(0, MIN_BOOKS).map((x) => x.book.bookId));
+        setSelected(data.data.books.slice(0, MIN_BOOKS).map((b) => b.bookId));
       })
       .catch((e) => {
         if (!c.signal.aborted) setBooksError(e);
@@ -60,7 +70,7 @@ export function ConnectionApp({
   useEffect(() => {
     const c = new AbortController();
     api
-      .saved(c.signal)
+      .saved(0, c.signal)
       .then((data) => {
         setSaved(data);
         setSavedError(null);
@@ -73,8 +83,8 @@ export function ConnectionApp({
 
   useEffect(() => () => job.current?.abort(), []);
 
-  const chosen = (books?.candidates ?? []).filter((c) =>
-    selected.includes(c.book.bookId),
+  const chosen = (books?.data.books ?? []).filter((b) =>
+    selected.includes(b.bookId),
   );
   function start() {
     if (chosen.length < MIN_BOOKS) return;
@@ -82,6 +92,7 @@ export function ConnectionApp({
     const c = new AbortController();
     job.current = c;
     setResult(null);
+    setLoadError(null);
     setFailure(null);
     setRunning(true);
     go("/connections/progress");
@@ -91,12 +102,15 @@ export function ConnectionApp({
         if (c.signal.aborted) return;
         setRunning(false);
         setResult(data);
-        go("/connections/result");
+        go(`/connections/result/${data.connectionId}`);
       })
       .catch((e) => {
         if (c.signal.aborted) return;
         setRunning(false);
         setFailure(e instanceof ConnectionError ? e.kind : "SERVER");
+        // The chosen books may no longer be connectable; refresh the list.
+        if (e instanceof ConnectionError && STALE_SELECTION_CODES.includes(e.code))
+          setBooksRevision((r) => r + 1);
         go("/connections/failed");
       });
   }
@@ -107,18 +121,41 @@ export function ConnectionApp({
     go("/connections");
   }
 
-  const savedMatch = path.match(/^\/connections\/saved\/(\d+)(\/edit)?$/);
-  const savedItem = savedMatch
-    ? saved?.find((s) => s.id === Number(savedMatch[1]))
-    : undefined;
+  const resultMatch = path.match(/^\/connections\/result\/(\d+)(\/edit)?$/);
+  // 근거 보기 for a saved sentence loads the same connection result.
+  const savedMatch = path.match(/^\/connections\/saved\/(\d+)$/);
+  const resultId = resultMatch
+    ? Number(resultMatch[1])
+    : savedMatch
+      ? Number(savedMatch[1])
+      : null;
+  const firstConnection = saved ? saved.totalCount === 0 : false;
+  // The just-generated result is in memory; otherwise (reload, link) fetch it.
+  const loaded = result && result.connectionId === resultId ? result : null;
+  const resultError = loadError && loadError.id === resultId ? loadError.error : null;
+  const needsResult = resultId !== null && !loaded && !resultError;
+  useEffect(() => {
+    if (!needsResult || resultId === null) return;
+    const c = new AbortController();
+    api
+      .result(resultId, c.signal)
+      .then((r) => {
+        if (!c.signal.aborted) setResult(r);
+      })
+      .catch((e) => {
+        if (!c.signal.aborted) setLoadError({ id: resultId, error: e });
+      });
+    return () => c.abort();
+  }, [api, needsResult, resultId, resultRevision]);
+
   const stale =
     (path === "/connections/progress" && !running) ||
     (path === "/connections/failed" && !failure) ||
-    (path.startsWith("/connections/result") && !result) ||
-    (savedMatch && saved && !savedItem);
+    path === "/connections/result" ||
+    path === "/connections/result/edit";
   useEffect(() => {
     // Flow screens hold in-memory state; after a reload, return to the start.
-    if (stale) go(savedMatch ? "/connections/saved" : "/connections");
+    if (stale) go("/connections");
   });
   if (stale) return null;
 
@@ -173,76 +210,107 @@ export function ConnectionApp({
       </SubScreen>
     );
 
-  if (path === "/connections/result/edit" && result)
+  if (resultId !== null && !loaded)
     return (
-      <EditScreen
-        initial={result.sentence}
-        onBack={() => go("/connections/result")}
-        onSave={async (sentence) => {
-          setResult({ ...result, sentence });
-          go("/connections/result");
-        }}
-      />
-    );
-
-  if (path === "/connections/result" && result)
-    return (
-      <ResultScreen
-        sentence={result.sentence}
-        evidence={result.evidence}
-        subtitle={foundText(result.evidence.length, result.isFirst)}
-        onBack={() => go("/connections")}
-        onEdit={() => go("/connections/result/edit")}
-        action={
-          <SaveButton
-            onSave={async () => {
-              const item = await api.save(result);
-              setSaved((list) => [item, ...(list ?? [])]);
-              setResult(null);
-              go("/connections/saved");
+      <SubScreen
+        title="연결 결과"
+        onBack={() => go(savedMatch ? "/connections/saved" : "/connections")}
+      >
+        {resultError instanceof ApiError && resultError.status === 404 ? (
+          <div className="load-state">
+            <ErrorMessage error="연결 결과를 찾을 수 없어요." />
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => go(savedMatch ? "/connections/saved" : "/connections")}
+            >
+              {savedMatch ? "저장한 문장으로 돌아가기" : "경험 연결로 돌아가기"}
+            </button>
+          </div>
+        ) : resultError ? (
+          <Failure
+            error={resultError}
+            retry={() => {
+              setLoadError(null);
+              setResultRevision((r) => r + 1);
             }}
           />
-        }
-      />
-    );
-
-  if (savedMatch && !saved)
-    return (
-      <SubScreen title="" onBack={() => go("/connections/saved")}>
-        {savedError ? (
-          <Failure error={savedError} retry={() => setSavedRevision((r) => r + 1)} />
         ) : (
           <Loading />
         )}
       </SubScreen>
     );
 
-  if (savedMatch && savedItem) {
-    const detail = `/connections/saved/${savedItem.id}`;
-    if (savedMatch[2])
-      return (
-        <EditScreen
-          initial={savedItem.sentence}
-          onBack={() => go(detail)}
-          onSave={async (sentence) => {
-            const item = await api.update(savedItem.id, sentence);
-            setSaved((list) =>
-              (list ?? []).map((s) => (s.id === item.id ? item : s)),
-            );
-            go(detail);
-          }}
-        />
-      );
+  if (loaded && savedMatch)
     return (
       <ResultScreen
-        sentence={savedItem.sentence}
-        evidence={savedItem.evidence}
-        subtitle={foundText(savedItem.evidence.length, savedItem.isFirst)}
+        sentence={loaded.sentence}
+        evidence={loaded.evidence}
+        subtitle={foundText(loaded.evidence.length, false)}
         onBack={() => go("/connections/saved")}
-        onEdit={() => go(`${detail}/edit`)}
+      />
+    );
+
+  if (loaded && resultMatch?.[2]) {
+    const detail = `/connections/result/${loaded.connectionId}`;
+    return (
+      <EditScreen
+        initial={loaded.sentence}
+        onBack={() => go(detail)}
+        onSave={async (sentence) => {
+          setResult({ ...loaded, sentence });
+          go(detail);
+        }}
       />
     );
   }
+
+  if (loaded)
+    return (
+      <ResultScreen
+        sentence={loaded.sentence}
+        evidence={loaded.evidence}
+        subtitle={foundText(
+          loaded.evidence.length,
+          !loaded.saved && firstConnection,
+        )}
+        onBack={() => go("/connections")}
+        onEdit={() => go(`/connections/result/${loaded.connectionId}/edit`)}
+        action={
+          loaded.saved ? (
+            <button
+              type="button"
+              className="primary tall"
+              onClick={() => go("/connections/saved")}
+            >
+              저장한 문장 보기
+            </button>
+          ) : (
+            <SaveButton
+              onSave={async () => {
+                try {
+                  const item = await api.save(loaded.connectionId, loaded.sentence);
+                  setResult({
+                    ...loaded,
+                    saved: true,
+                    sentence: item.finalSentence,
+                  });
+                  setSavedRevision((r) => r + 1);
+                  go("/connections/saved");
+                } catch (e) {
+                  if (e instanceof ApiError && e.code === "ALREADY_SAVED") {
+                    // Saved earlier (e.g. another tab): offer the saved list.
+                    setResult({ ...loaded, saved: true });
+                    return;
+                  }
+                  throw saveError(e);
+                }
+              }}
+            />
+          )
+        }
+      />
+    );
 
   const tab = path === "/connections/saved" ? "saved" : "connect";
   return (
@@ -278,10 +346,14 @@ export function ConnectionApp({
           <ConnectTab
             books={books}
             selected={selected}
-            firstConnection={!saved?.length}
+            firstConnection={firstConnection}
             onToggle={(id) =>
               setSelected((list) =>
-                list.includes(id) ? list.filter((v) => v !== id) : [...list, id],
+                list.includes(id)
+                  ? list.filter((v) => v !== id)
+                  : list.length >= MAX_BOOKS
+                    ? list
+                    : [...list, id],
               )
             }
             onConnect={start}
@@ -292,7 +364,23 @@ export function ConnectionApp({
       ) : !saved ? (
         <Loading />
       ) : (
-        <SavedTab saved={saved} />
+        <SavedTab
+          saved={saved}
+          onMore={async () => {
+            const next = await api.saved(saved.page + 1);
+            setSaved((cur) =>
+              cur && {
+                ...next,
+                items: [
+                  ...cur.items,
+                  ...next.items.filter(
+                    (n) => !cur.items.some((c) => c.id === n.id),
+                  ),
+                ],
+              },
+            );
+          }}
+        />
       )}
       <BottomNav
         activeTab="connections"
@@ -317,8 +405,11 @@ function ConnectTab({
   onToggle: (bookId: number) => void;
   onConnect: () => void;
 }) {
-  const { total, candidates } = books;
-  if (!total)
+  const {
+    data: { canConnect, eligibleCount, books: list },
+    hasBooks,
+  } = books;
+  if (!hasBooks)
     return (
       <>
         <div className="connection-empty">
@@ -352,28 +443,28 @@ function ConnectTab({
       </>
     );
 
-  if (candidates.length < MIN_BOOKS)
+  if (!canConnect)
     return (
       <>
         <div className="connection-shortage">
           <h2>
-            {MIN_BOOKS - candidates.length === 1
+            {MIN_BOOKS - eligibleCount <= 1
               ? "한 권의 기록을 더 준비해요"
-              : `${MIN_BOOKS - candidates.length}권의 기록을 더 준비해요`}
+              : `${MIN_BOOKS - eligibleCount}권의 기록을 더 준비해요`}
           </h2>
           <p>
             조건을 충족한 책만 목록에 표시돼요.
             <br />
-            현재 {candidates.length}권이 준비됐어요. 첫 연결에는 {MIN_BOOKS}권이
+            현재 {eligibleCount}권이 준비됐어요. 첫 연결에는 {MIN_BOOKS}권이
             필요해요.
           </p>
         </div>
-        {candidates.length > 0 && (
+        {list.length > 0 && (
           <ul className="connection-books">
-            {candidates.map((c) => (
-              <li key={c.book.bookId}>
+            {list.map((b) => (
+              <li key={b.bookId}>
                 <div className="connection-book static">
-                  <BookCard book={c.book} />
+                  <BookCard book={b} />
                 </div>
               </li>
             ))}
@@ -406,7 +497,7 @@ function ConnectTab({
           <strong>
             {firstConnection ? "첫 연결을 시작할 수 있어요" : "연결을 시작할 수 있어요"}
           </strong>
-          <p>조건을 충족한 책 {candidates.length}권이 준비됐어요.</p>
+          <p>조건을 충족한 책 {eligibleCount}권이 준비됐어요.</p>
         </div>
       </div>
       <div className="connection-select-head">
@@ -414,17 +505,19 @@ function ConnectTab({
         <span aria-live="polite">{count}권 선택</span>
       </div>
       <ul className="connection-books" aria-label="연결할 책">
-        {candidates.map((c: Candidate) => {
-          const on = selected.includes(c.book.bookId);
+        {list.map((b) => {
+          const on = selected.includes(b.bookId);
+          const full = !on && count >= MAX_BOOKS;
           return (
-            <li key={c.book.bookId}>
+            <li key={b.bookId}>
               <button
                 type="button"
                 className={`connection-book ${on ? "selected" : ""}`}
                 aria-pressed={on}
-                onClick={() => onToggle(c.book.bookId)}
+                disabled={full}
+                onClick={() => onToggle(b.bookId)}
               >
-                <BookCard book={c.book} />
+                <BookCard book={b} />
                 <CheckMark on={on} />
               </button>
             </li>
@@ -439,7 +532,11 @@ function ConnectTab({
           <br />
           각각 20자 이상 작성해주세요.
         </p>
-        <p>선택한 책의 기록만 연결에 사용해요.</p>
+        <p>
+          선택한 책의 기록만 연결에 사용해요.
+          <br />
+          한 번에 {MIN_BOOKS}~{MAX_BOOKS}권까지 연결할 수 있어요.
+        </p>
       </div>
       <div className="connection-cta">
         <button
@@ -457,8 +554,16 @@ function ConnectTab({
   );
 }
 
-function SavedTab({ saved }: { saved: SavedSentence[] }) {
-  if (!saved.length)
+function SavedTab({
+  saved,
+  onMore,
+}: {
+  saved: SavedPage;
+  onMore: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  if (!saved.items.length)
     return (
       <>
         <div className="connection-empty saved-empty">
@@ -482,15 +587,15 @@ function SavedTab({ saved }: { saved: SavedSentence[] }) {
     );
   return (
     <>
-      <h2 className="saved-count">저장한 문장 {saved.length}개</h2>
+      <h2 className="saved-count">저장한 문장 {saved.totalCount}개</h2>
       <ul className="saved-list">
-        {saved.map((item) => (
+        {saved.items.map((item) => (
           <li key={item.id} className="saved-card">
             <small>{savedDate(item.savedAt)}</small>
             <p className="saved-sentence">{item.sentence}</p>
             <div className="saved-tags">
-              {item.evidence.map((e) => (
-                <span key={e.pageId}>{e.bookTitle}</span>
+              {item.bookTitles.map((title, i) => (
+                <span key={i}>{title}</span>
               ))}
             </div>
             <div className="saved-actions">
@@ -506,6 +611,29 @@ function SavedTab({ saved }: { saved: SavedSentence[] }) {
           </li>
         ))}
       </ul>
+      {saved.hasNext && (
+        <>
+          <ErrorMessage error={error} />
+          <button
+            type="button"
+            className="quarter-more saved-more"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                await onMore();
+              } catch (e) {
+                setError(e);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "불러오는 중…" : `더 보기 · ${saved.items.length}/${saved.totalCount}`}
+          </button>
+        </>
+      )}
       <p className="saved-footnote">
         <Icon name="info" />
         저장한 문장은 기록이 바뀌어도 그대로 보관돼요.
@@ -526,7 +654,7 @@ function ResultScreen({
   evidence: Evidence[];
   subtitle: string;
   onBack: () => void;
-  onEdit: () => void;
+  onEdit?: () => void;
   action?: ReactNode;
 }) {
   return (
@@ -538,9 +666,11 @@ function ResultScreen({
       <p className="result-subtitle">{subtitle}</p>
       <div className="result-card">
         <p className="result-sentence">{sentence}</p>
-        <button type="button" className="link-button" onClick={onEdit}>
-          문장 수정 ›
-        </button>
+        {onEdit && (
+          <button type="button" className="link-button" onClick={onEdit}>
+            문장 수정 ›
+          </button>
+        )}
       </div>
       <p className="result-hint">
         기록을 바탕으로 제안한 문장이에요.
@@ -550,18 +680,24 @@ function ResultScreen({
       <section className="evidence">
         <h2>근거가 된 기록</h2>
         <ul>
-          {evidence.map((e) => (
-            <li key={e.pageId}>
+          {evidence.map((e, i) => (
+            <li key={e.evidenceId ?? i}>
               <strong>{e.bookTitle}</strong>
               <span>{e.label}</span>
               <blockquote>“{e.quote}”</blockquote>
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => go(`/activity/pages/${e.pageId}`)}
-              >
-                원문 보기 ›
-              </button>
+              {e.pageId !== null ? (
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => go(`/activity/pages/${e.pageId}`)}
+                >
+                  원문 보기 ›
+                </button>
+              ) : (
+                <small className="evidence-missing">
+                  원문 기록이 삭제됐어요. 저장된 발췌만 보여요.
+                </small>
+              )}
             </li>
           ))}
         </ul>
@@ -619,7 +755,7 @@ function EditScreen({
         className="edit-area"
         aria-label="문장"
         value={text}
-        maxLength={300}
+        maxLength={MAX_SENTENCE_LENGTH}
         onChange={(e) => setText(e.target.value)}
       />
       <p className="edit-hint">직접 한 행동과 기록에 있는 사실을 중심으로 써주세요.</p>
@@ -670,11 +806,12 @@ function SubScreen({
   );
 }
 
-function BookCard({ book }: { book: Book }) {
+function BookCard({ book }: { book: EligibleBook }) {
   return (
     <>
       <span
-        className={`mini-cover ${book.coverColor?.toLowerCase() || "cream"}`}
+        className={`mini-cover ${isDarkColor(book.coverColor) ? "dark" : ""}`}
+        style={{ background: book.coverColor }}
         aria-hidden="true"
       >
         <span className="mini-title">{book.title}</span>
@@ -782,4 +919,12 @@ function CopyIcon() {
       <path d="M4 12H3.5A1.5 1.5 0 0 1 2 10.5v-7A1.5 1.5 0 0 1 3.5 2h6A1.5 1.5 0 0 1 11 3.5V4" />
     </svg>
   );
+}
+
+function saveError(e: unknown) {
+  if (e instanceof ApiError && e.code === "INVALID_SENTENCE")
+    return new Error("문장은 1~300자로 입력해 주세요.");
+  if (e instanceof ApiError && e.code === "CONNECTION_NOT_FOUND")
+    return new Error("연결 결과를 찾을 수 없어요.");
+  return e;
 }

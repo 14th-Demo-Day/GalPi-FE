@@ -45,7 +45,7 @@ test("reset deletes every book and saved sentence", async () => {
       },
     },
     {
-      saved: async () => saved,
+      saved: async () => ({ totalCount: saved.length, page: 0, hasNext: false, items: saved }),
       clear: async () => {
         saved = [];
       },
