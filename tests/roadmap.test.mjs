@@ -4,10 +4,14 @@ import {
   booksInQuarter,
   booksInYear,
   isOngoing,
-  layoutBars,
+  placeBars,
+  buildRoadmap,
+  bookStatus,
+  buildBookDetail,
   listPeriod,
   searchBooks,
-  yearOptions,
+  buildYears,
+  buildQuarter,
   MIN_BAR_WIDTH,
 } from "../src/features/roadmap/roadmap.ts";
 
@@ -41,33 +45,81 @@ test("open-ended books run until today", () => {
   assert.equal(isOngoing(book(2, "끝", "2026-01-01", "2026-02-01"), today), false);
 });
 
-test("stacks overlapping bars into lanes and keeps short bars readable", () => {
-  const { bars, lanes } = layoutBars(
-    [
-      book(1, "A", "2026-01-01", "2026-06-30"),
-      book(2, "B", "2026-03-01", "2026-09-30"),
-      book(3, "C", "2026-07-01", "2026-12-31"),
-      book(4, "D", "2026-12-28", "2026-12-30"),
-    ],
+const bar = (bookId, startDate, endDate, lane = 0) => ({
+  bookId,
+  title: `책${bookId}`,
+  startDate,
+  endDate,
+  lane,
+});
+const pos = (placed, id) => placed.find((p) => p.bar.bookId === id);
+
+test("places server bars on the year axis, clipped to the year", () => {
+  const placed = placeBars(
+    {
+      category: "CLUB",
+      laneCount: 2,
+      bars: [
+        bar(1, "2026-01-01", "2026-06-30"),
+        bar(2, "2025-10-01", "2026-03-31", 1),
+        bar(3, "2026-09-01", "2027-02-28", 0),
+      ],
+    },
     2026,
-    today,
   );
-  const byId = Object.fromEntries(bars.map((b) => [b.book.bookId, b]));
-  assert.equal(byId[1].lane, 0);
-  assert.equal(byId[2].lane, 1);
-  assert.equal(byId[3].lane, 0);
-  assert.equal(byId[1].left, 0);
-  assert.ok(Math.abs(byId[1].width - (181 / 365) * 100) < 0.01);
-  assert.equal(byId[4].width, MIN_BAR_WIDTH);
-  assert.equal(byId[4].left + byId[4].width, 100);
-  assert.equal(byId[4].lane, 1);
-  assert.equal(lanes, 2);
+  assert.equal(pos(placed, 1).left, 0);
+  assert.ok(Math.abs(pos(placed, 1).width - (181 / 365) * 100) < 0.01);
+  assert.equal(pos(placed, 2).left, 0);
+  assert.ok(Math.abs(pos(placed, 2).width - (90 / 365) * 100) < 0.01);
+  const third = pos(placed, 3);
+  assert.ok(Math.abs(third.left + third.width - 100) < 0.01);
 });
 
-test("clips bars that cross the year boundary", () => {
-  const { bars } = layoutBars([book(1, "A", "2025-10-01", "2026-03-31")], 2026, today);
-  assert.equal(bars[0].left, 0);
-  assert.ok(Math.abs(bars[0].width - (90 / 365) * 100) < 0.01);
+test("a bar without an end date fills only its start quarter", () => {
+  const [p] = placeBars(
+    { category: "CLUB", laneCount: 1, bars: [bar(1, "2026-10-01", null)] },
+    2026,
+  );
+  assert.ok(Math.abs(p.left - (273 / 365) * 100) < 0.01);
+  assert.ok(Math.abs(p.left + p.width - 100) < 0.01);
+});
+
+test("short bars widen for readability without covering the next bar", () => {
+  const placed = placeBars(
+    {
+      category: "CONTEST",
+      laneCount: 1,
+      bars: [bar(1, "2026-03-01", "2026-03-05"), bar(2, "2026-04-01", "2026-12-31")],
+    },
+    2026,
+  );
+  const a = pos(placed, 1), b = pos(placed, 2);
+  assert.ok(a.width > (5 / 365) * 100);
+  assert.ok(a.left + a.width <= b.left + 1e-9);
+  const [end] = placeBars(
+    { category: "STUDY", laneCount: 1, bars: [bar(9, "2026-12-28", "2026-12-30")] },
+    2026,
+  );
+  assert.equal(end.width, MIN_BAR_WIDTH);
+  assert.ok(Math.abs(end.left + end.width - 100) < 1e-9);
+});
+
+test("preview roadmap matches the API shape: 5 rows, ETC excluded, lanes", () => {
+  const data = buildRoadmap(
+    [
+      { bookId: 3, title: "멋사", category: "CLUB", startDate: "2026-09-01", endDate: "2026-12-20" },
+      { bookId: 7, title: "리서치", category: "CLUB", startDate: "2026-10-01", endDate: "2026-11-30" },
+      { bookId: 8, title: "기타", category: "ETC", startDate: "2026-10-01", endDate: null },
+      { bookId: 9, title: "작년", category: "STUDY", startDate: "2025-01-01", endDate: "2025-02-01" },
+    ],
+    2026,
+  );
+  assert.equal(data.year, 2026);
+  assert.deepEqual(data.rows.map((r) => r.category), ["EXTERNAL", "CAMPUS", "CLUB", "CONTEST", "STUDY"]);
+  const club = data.rows[2];
+  assert.equal(club.laneCount, 2);
+  assert.deepEqual(club.bars.map((b) => [b.bookId, b.lane]), [[3, 0], [7, 1]]);
+  assert.deepEqual(data.rows[4], { category: "STUDY", laneCount: 0, bars: [] });
 });
 
 test("formats list periods with year notes", () => {
@@ -85,6 +137,43 @@ test("searches titles and builds the year range", () => {
   const books = [book(1, "동아리 매거진", "2024-01-01", "2026-01-01"), book(2, "해커톤", "2026-01-01", "2026-02-01")];
   assert.deepEqual(searchBooks(books, " 동아리 ").map((b) => b.bookId), [1]);
   assert.equal(searchBooks(books, "").length, 2);
-  assert.deepEqual(yearOptions([], 2026), [2024, 2025, 2026, 2027, 2028]);
-  assert.deepEqual(yearOptions([book(1, "A", "2021-05-01", "2029-01-01")], 2026).at(0), 2021);
+  const { currentYear, years } = buildYears(books, 2026, today);
+  assert.equal(currentYear, 2026);
+  assert.deepEqual(years.map((y) => y.year), [2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031]);
+  assert.deepEqual(years.filter((y) => y.hasRecord).map((y) => y.year), [2024, 2025, 2026]);
+});
+
+test("book status: COMPLETED only when the end date is before today", () => {
+  assert.equal(bookStatus("2026-11-23", "2026-11-24"), "COMPLETED");
+  assert.equal(bookStatus("2026-11-24", "2026-11-24"), "IN_PROGRESS");
+  assert.equal(bookStatus(null, "2026-11-24"), "IN_PROGRESS");
+  assert.deepEqual(
+    buildBookDetail(
+      { bookId: 3, title: "멋사 데모데이", category: "CLUB", startDate: "2026-09-01", endDate: "2026-12-20" },
+      4,
+      "2026-11-24",
+    ),
+    {
+      bookId: 3,
+      title: "멋사 데모데이",
+      category: "CLUB",
+      status: "IN_PROGRESS",
+      startDate: "2026-09-01",
+      endDate: "2026-12-20",
+      pageCount: 4,
+    },
+  );
+});
+
+test("preview quarter list: overlap, ETC excluded, keyword, start ascending", () => {
+  const books = [
+    { bookId: 1, title: "멋사 데모데이", category: "CLUB", startDate: "2026-11-01", endDate: "2026-12-20" },
+    { bookId: 2, title: "멋사 스터디", category: "STUDY", startDate: "2026-09-01", endDate: "2026-10-15" },
+    { bookId: 3, title: "기타 메모", category: "ETC", startDate: "2026-10-01", endDate: "2026-10-02" },
+    { bookId: 4, title: "봄 공모전", category: "CONTEST", startDate: "2026-03-01", endDate: "2026-04-01" },
+  ];
+  assert.deepEqual(buildQuarter(books, 2026, 4, "", today).map((b) => b.bookId), [2, 1]);
+  assert.deepEqual(buildQuarter(books, 2026, 4, "데모", today).map((b) => b.bookId), [1]);
+  assert.deepEqual(buildQuarter(books, 2026, 4, "독서", today), []);
+  assert.deepEqual(Object.keys(buildQuarter(books, 2026, 2, "", today)[0]).sort(), ["bookId", "category", "endDate", "startDate", "title"]);
 });

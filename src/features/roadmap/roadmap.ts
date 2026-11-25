@@ -73,36 +73,186 @@ export function searchBooks(books: Book[], query: string) {
   return q ? books.filter((b) => b.title.toLowerCase().includes(q)) : books;
 }
 
-export interface Bar {
-  book: Book;
-  left: number; // percent of the year
-  width: number; // percent of the year
+// GET /api/roadmap?year= response (data). Rows always come in the order
+// EXTERNAL, CAMPUS, CLUB, CONTEST, STUDY; ETC books are excluded by the server.
+export interface RoadmapBar {
+  bookId: number;
+  title: string;
+  startDate: string;
+  endDate: string | null;
   lane: number;
 }
+export interface RoadmapRow {
+  category: Category;
+  laneCount: number;
+  bars: RoadmapBar[];
+}
+export interface RoadmapData {
+  year: number;
+  rows: RoadmapRow[];
+}
+
 export const MIN_BAR_WIDTH = 20;
 
-// Places one category's books on the year axis, stacking overlaps into lanes.
-export function layoutBars(books: Book[], year: number, today: string) {
+// Year-axis range of a bar in percent, before readability adjustments.
+// The server returns any book overlapping the year, so clip to the year here.
+// Without an end date, fill only the quarter the book starts in.
+function barRange(bar: RoadmapBar, year: number) {
   const [from, to] = yearBounds(year);
   const total = to + DAY - from;
-  const bars = booksInYear(books, year, today)
-    .map((book) => {
-      const { start, end } = span(book, today);
-      let left = ((Math.max(start, from) - from) / total) * 100;
-      const right = ((Math.min(end, to) + DAY - from) / total) * 100;
-      const width = Math.max(right - left, MIN_BAR_WIDTH);
-      left = Math.min(left, 100 - width);
-      return { book, left, width, lane: 0 };
-    })
-    .sort((a, b) => a.left - b.left || b.width - a.width);
-  const laneEnds: number[] = [];
-  for (const bar of bars) {
-    let lane = laneEnds.findIndex((end) => end <= bar.left + 0.01);
-    if (lane === -1) lane = laneEnds.length;
-    laneEnds[lane] = bar.left + bar.width;
-    bar.lane = lane;
+  const pct = (t: number) => ((t - from) / total) * 100;
+  const start = day(bar.startDate);
+  if (!bar.endDate) {
+    const q = start < from ? 1 : (Math.floor(new Date(start).getUTCMonth() / 3) + 1) as Quarter;
+    const [qFrom, qTo] = quarterBounds(year, q);
+    return { left: pct(qFrom), right: pct(qTo + DAY) };
   }
-  return { bars, lanes: laneEnds.length };
+  const end = Math.max(day(bar.endDate), start);
+  return {
+    left: pct(Math.max(start, from)),
+    right: pct(Math.min(end, to) + DAY),
+  };
+}
+
+export interface PlacedBar {
+  bar: RoadmapBar;
+  left: number; // percent of the year
+  width: number; // percent of the year
+}
+
+// Positions one row's bars. Lanes come from the server; short bars are widened
+// to stay readable, but never into the next bar on the same lane.
+export function placeBars(row: RoadmapRow, year: number) {
+  const placed: PlacedBar[] = [];
+  const lanes = new Map<number, { bar: RoadmapBar; left: number; right: number }[]>();
+  for (const bar of row.bars) {
+    const list = lanes.get(bar.lane) ?? [];
+    list.push({ bar, ...barRange(bar, year) });
+    lanes.set(bar.lane, list);
+  }
+  for (const list of lanes.values()) {
+    list.sort((a, b) => a.left - b.left);
+    let prevEnd = 0;
+    list.forEach((item, i) => {
+      const nextLeft = i + 1 < list.length ? list[i + 1].left : 100;
+      const desired = Math.max(item.right - item.left, MIN_BAR_WIDTH);
+      const left = Math.max(prevEnd, Math.min(item.left, 100 - desired));
+      const width = Math.max(
+        Math.min(desired, nextLeft - left, 100 - left),
+        item.right - item.left,
+      );
+      placed.push({ bar: item.bar, left, width });
+      prevEnd = left + width;
+    });
+  }
+  return placed;
+}
+
+export const ROADMAP_CATEGORIES: Category[] = [
+  "EXTERNAL",
+  "CAMPUS",
+  "CLUB",
+  "CONTEST",
+  "STUDY",
+];
+
+// Builds the same response shape locally, for the dev preview API.
+export function buildRoadmap(books: Book[], year: number): RoadmapData {
+  const [from, to] = yearBounds(year);
+  const quarterEnd = (start: number) => {
+    const d = new Date(start);
+    return Date.UTC(d.getUTCFullYear(), (Math.floor(d.getUTCMonth() / 3) + 1) * 3, 0);
+  };
+  return {
+    year,
+    rows: ROADMAP_CATEGORIES.map((category) => {
+      const items = books
+        .filter((b) => b.category === category)
+        .map((b) => {
+          const start = day(b.startDate);
+          const end = b.endDate ? day(b.endDate) : quarterEnd(start);
+          return { b, start, end: Math.max(start, end) };
+        })
+        .filter(({ start, end }) => start <= to && end >= from)
+        .sort((x, y) => x.start - y.start || x.end - y.end);
+      const laneEnds: number[] = [];
+      const bars = items.map(({ b, start, end }) => {
+        let lane = laneEnds.findIndex((e) => e < start);
+        if (lane === -1) lane = laneEnds.length;
+        laneEnds[lane] = end;
+        return {
+          bookId: b.bookId,
+          title: b.title,
+          startDate: b.startDate.slice(0, 10),
+          endDate: b.endDate ? b.endDate.slice(0, 10) : null,
+          lane,
+        };
+      });
+      return { category, laneCount: laneEnds.length, bars };
+    }),
+  };
+}
+
+// GET /api/roadmap/quarter?year=&quarter=&keyword= response (data): books
+// overlapping the quarter, ETC excluded, sorted by start date ascending.
+export type QuarterBook = Pick<
+  Book,
+  "bookId" | "title" | "category" | "startDate" | "endDate"
+>;
+
+// Dev preview counterpart of the quarterly endpoint.
+export function buildQuarter(
+  books: Book[],
+  year: number,
+  q: Quarter,
+  keyword: string,
+  today: string,
+): QuarterBook[] {
+  return searchBooks(
+    booksInQuarter(books, year, q, today).filter((b) => b.category !== "ETC"),
+    keyword,
+  ).map(({ bookId, title, category, startDate, endDate }) => ({
+    bookId,
+    title,
+    category,
+    startDate: startDate.slice(0, 10),
+    endDate: endDate ? endDate.slice(0, 10) : null,
+  }));
+}
+
+// GET /api/roadmap/books/{bookId} response (data), shared with the quarterly list.
+export interface RoadmapBookDetail {
+  bookId: number;
+  title: string;
+  category: Category;
+  status: "IN_PROGRESS" | "COMPLETED";
+  startDate: string;
+  endDate: string | null;
+  pageCount: number;
+}
+
+// Server rule: COMPLETED when the end date is before today, else IN_PROGRESS.
+export const bookStatus = (
+  endDate: string | null,
+  today: string,
+): RoadmapBookDetail["status"] =>
+  endDate && endDate.slice(0, 10) < today ? "COMPLETED" : "IN_PROGRESS";
+
+// Dev preview counterpart of the detail endpoint.
+export function buildBookDetail(
+  book: Book,
+  pageCount: number,
+  today: string,
+): RoadmapBookDetail {
+  return {
+    bookId: book.bookId,
+    title: book.title,
+    category: book.category,
+    status: bookStatus(book.endDate, today),
+    startDate: book.startDate.slice(0, 10),
+    endDate: book.endDate ? book.endDate.slice(0, 10) : null,
+    pageCount,
+  };
 }
 
 const md = (date: string) => date.slice(5, 10).replace("-", ".");
@@ -120,12 +270,25 @@ export function listPeriod(book: Book, year: number) {
   };
 }
 
-export function yearOptions(books: Book[], thisYear: number) {
-  let min = thisYear - 2,
-    max = thisYear + 2;
-  for (const b of books) {
-    min = Math.min(min, Number(b.startDate.slice(0, 4)));
-    if (b.endDate) max = Math.max(max, Number(b.endDate.slice(0, 4)));
-  }
-  return Array.from({ length: max - min + 1 }, (_, i) => min + i);
+// GET /api/roadmap/years response (data): this year ±5, with record flags.
+export interface RoadmapYears {
+  currentYear: number;
+  years: { year: number; hasRecord: boolean }[];
+}
+export const YEAR_SPAN = 5;
+
+// Same shape built locally: the dev preview API, and a fallback if the
+// request fails so the picker still works.
+export function buildYears(
+  books: Book[],
+  currentYear: number,
+  today: string,
+): RoadmapYears {
+  return {
+    currentYear,
+    years: Array.from({ length: YEAR_SPAN * 2 + 1 }, (_, i) => {
+      const year = currentYear - YEAR_SPAN + i;
+      return { year, hasRecord: booksInYear(books, year, today).length > 0 };
+    }),
+  };
 }
