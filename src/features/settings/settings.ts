@@ -1,6 +1,5 @@
 import { ApiError } from "../activity/api.ts";
 import type { ActivityApi } from "../activity/api";
-import type { ConnectionApi } from "../connection/api";
 
 export interface PasswordInput {
   current: string;
@@ -33,51 +32,71 @@ export function validatePassword({ current, next, confirm }: PasswordInput) {
   return errors;
 }
 
-export const WRONG_PASSWORD = "INVALID_PASSWORD";
+// PATCH /api/users/me/password (4.1.2) error codes → the field to mark.
+export const PASSWORD_ERROR_FIELDS: Record<string, keyof PasswordInput> = {
+  WRONG_CURRENT_PASSWORD: "current",
+  INVALID_INPUT: "current",
+  INVALID_PASSWORD_FORMAT: "next",
+  PASSWORD_CONFIRM_MISMATCH: "confirm",
+};
+const PASSWORD_ERROR_TEXT: Record<string, string> = {
+  WRONG_CURRENT_PASSWORD: "현재 비밀번호가 맞지 않아요. 다시 확인해주세요.",
+  INVALID_INPUT: "현재 비밀번호를 입력해주세요.",
+  INVALID_PASSWORD_FORMAT: PASSWORD_RULE,
+  PASSWORD_CONFIRM_MISMATCH: "새 비밀번호와 일치하지 않아요. 다시 입력해주세요.",
+};
+
+// Turns a server error into a field message, or null for a general failure.
+export function passwordFieldError(
+  e: unknown,
+): PasswordErrors | null {
+  if (!(e instanceof ApiError)) return null;
+  const field = PASSWORD_ERROR_FIELDS[e.code];
+  return field ? { [field]: PASSWORD_ERROR_TEXT[e.code] } : null;
+}
+
+// GET /api/users/me (4.1) response (data).
+export interface Me {
+  userId: number;
+  loginId: string;
+  // true when there is at least one book or saved sentence.
+  hasRecords: boolean;
+}
 
 export interface SettingsApi {
   changePassword: (input: {
     currentPassword: string;
     newPassword: string;
+    newPasswordConfirm: string;
   }) => Promise<void>;
-  hasRecords: (signal?: AbortSignal) => Promise<boolean>;
+  me: (signal?: AbortSignal) => Promise<Me>;
   resetRecords: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
-// Record reset uses the existing activity/connection APIs. There is no password
-// endpoint yet, so changePassword is a stand-in that always succeeds; it must
-// reject with ApiError code WRONG_PASSWORD when the current password is wrong.
-// Dev only: add ?settings=wrong-password to see that error.
+// me: GET /api/users/me (4.1).
+// changePassword: PATCH /api/users/me/password (4.1.2).
+// resetRecords: DELETE /api/users/me/records (4.2.1) — books, pages,
+// attachments and saved sentences; the account stays.
+// logout: POST /api/auth/logout (4.3.1); the caller then deletes the token.
 export function createSettingsApi(
-  activity: Pick<ActivityApi, "books" | "deleteBook">,
-  connection: Pick<ConnectionApi, "saved" | "clear">,
+  activity: Pick<ActivityApi, "request">,
 ): SettingsApi {
   return {
-    async changePassword() {
-      await new Promise((r) => setTimeout(r, 500));
-      if (
-        import.meta.env?.DEV &&
-        new URLSearchParams(location.search).get("settings") ===
-          "wrong-password"
-      )
-        throw new ApiError(
-          "현재 비밀번호가 맞지 않아요. 다시 확인해주세요.",
-          WRONG_PASSWORD,
-          400,
-        );
+    async changePassword(input) {
+      await activity.request<null>("/api/users/me/password", {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      });
     },
-    async hasRecords(signal) {
-      const [books, saved] = await Promise.all([
-        activity.books("LATEST", signal),
-        connection.saved(0, signal),
-      ]);
-      return books.length > 0 || saved.totalCount > 0;
+    me: (signal) => activity.request<Me>("/api/users/me", { signal }),
+    async logout() {
+      await activity.request<null>("/api/auth/logout", { method: "POST" });
     },
     async resetRecords() {
-      // Deleting a book removes its pages and attachments on the server.
-      const books = await activity.books("LATEST");
-      for (const book of books) await activity.deleteBook(book.bookId);
-      await connection.clear();
+      await activity.request<null>("/api/users/me/records", {
+        method: "DELETE",
+      });
     },
   };
 }

@@ -60,7 +60,6 @@ export interface ConnectionApi {
   ) => Promise<ConnectionResult>;
   saved: (page?: number, signal?: AbortSignal) => Promise<SavedPage>;
   save: (connectionId: number, sentence: string) => Promise<SavedConnection>;
-  clear: () => Promise<void>;
 }
 
 // books: GET /api/connections/eligible-books (3.1.1).
@@ -125,9 +124,6 @@ export function createLocalConnectionApi(api: ActivityApi): ConnectionApi {
         },
       );
     },
-    // No endpoint for deleting saved sentences yet; the settings reset relies
-    // on the server removing them along with the books.
-    async clear() {},
   };
 }
 

@@ -94,7 +94,6 @@ export function RoadmapScreen({
         <AnnualView
           key={year}
           api={api}
-          hasRecords={years?.years.some((y) => y.hasRecord) ?? true}
           year={year}
           highlight={year === thisYear ? currentQuarter() : null}
           onSelect={setSelected}
@@ -205,14 +204,12 @@ function YearPicker({
 
 function AnnualView({
   api,
-  hasRecords,
   year,
   highlight,
   onSelect,
   onCreateBook,
 }: {
   api: ActivityApi;
-  hasRecords: boolean;
   year: number;
   highlight: Quarter | null;
   onSelect: (book: Book) => void;
@@ -310,18 +307,14 @@ function AnnualView({
       </div>
       {empty && (
         <div className="roadmap-empty">
-          <h2>
-            {hasRecords
-              ? `${year}년에 쌓인 활동이 없어요`
-              : "아직 쌓인 활동이 없어요"}
-          </h2>
+          <h2>아직 쌓인 활동이 없어요</h2>
           <p>
             첫 책을 만들면 활동 기간과 분야에 따라
             <br />
             로드맵이 자동으로 채워져요.
           </p>
           <button type="button" className="primary tall" onClick={onCreateBook}>
-            {hasRecords ? "새 책 만들기" : "첫 책 만들기"}
+            첫 책 만들기
           </button>
         </div>
       )}

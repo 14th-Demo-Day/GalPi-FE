@@ -23,7 +23,7 @@ const settingsApis = new WeakMap<ActivityApi, SettingsApi>();
 function settingsApiFor(api: ActivityApi) {
   let value = settingsApis.get(api);
   if (!value)
-    settingsApis.set(api, (value = createSettingsApi(api, connectionApiFor(api))));
+    settingsApis.set(api, (value = createSettingsApi(api)));
   return value;
 }
 export default function App({ api = serverApi }: { api?: ActivityApi }) {

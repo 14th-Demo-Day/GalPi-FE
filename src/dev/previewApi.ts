@@ -217,6 +217,35 @@ function createPreviewApi(): ActivityApi {
         evidences: found.evidences,
       }) as T;
     }
+    if (path === "/api/auth/logout" && init.method === "POST") return null as T;
+    if (path === "/api/users/me/records" && init.method === "DELETE") {
+      for (const b of [...books]) removeBook(b.bookId);
+      uploads.clear();
+      connections.clear();
+      savedConnections.clear();
+      return null as T;
+    }
+    if (path === "/api/users/me/password" && init.method === "PATCH") {
+      const body = JSON.parse(String(init.body)) as {
+        currentPassword: string;
+        newPassword: string;
+        newPasswordConfirm: string;
+      };
+      if (!body.currentPassword)
+        throw new ApiError("현재 비밀번호를 입력해주세요.", "INVALID_INPUT", 400);
+      // Dev only: ?settings=wrong-password shows the wrong-password error.
+      if (new URLSearchParams(location.search).get("settings") === "wrong-password")
+        throw new ApiError("현재 비밀번호가 일치하지 않습니다.", "WRONG_CURRENT_PASSWORD", 400);
+      if (body.newPassword !== body.newPasswordConfirm)
+        throw new ApiError("새 비밀번호가 일치하지 않습니다.", "PASSWORD_CONFIRM_MISMATCH", 400);
+      return null as T;
+    }
+    if (path === "/api/users/me")
+      return {
+        userId: 1,
+        loginId: sessionStorage.getItem("galpi.loginId") ?? "galpi01",
+        hasRecords: books.length > 0 || savedConnections.size > 0,
+      } as T;
     if (path === "/api/connections/eligible-books")
       return buildEligibleBooks(books, pages) as T;
     if (path === "/api/roadmap/years")
