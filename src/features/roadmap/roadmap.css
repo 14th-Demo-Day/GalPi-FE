@@ -1,6 +1,5 @@
 .roadmap-screen {
-  --highlight: #ebe8e0;
-  --bar: #e6ebe5;
+  /* Figma: the current quarter header and the bars share var(--sage). */
   --bar-height: 36px;
   --bar-gap: 6px;
   padding: 48px 24px 120px;
@@ -95,7 +94,7 @@
 }
 .grid-row {
   display: grid;
-  grid-template-columns: 66px repeat(4, 1fr);
+  grid-template-columns: 64px repeat(4, 1fr);
   border-top: 1px solid var(--line);
 }
 .grid-row.grid-head {
@@ -121,12 +120,14 @@
   grid-row: 1;
   border-left: 1px solid var(--line);
 }
+/* Figma: 75.5 × 52, column, centered, gap 2px. */
 .grid-quarter {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8px 0;
+  gap: 2px;
+  height: 52px;
 }
 .grid-quarter strong {
   font-size: 14px;
@@ -139,7 +140,7 @@
   line-height: 16px;
 }
 .grid-quarter.current {
-  background: var(--highlight);
+  background: var(--sage);
 }
 .grid-cell:nth-child(2) {
   grid-column: 2;
@@ -157,7 +158,7 @@
   grid-row: 1;
   grid-column: 2 / 6;
   position: relative;
-  margin: 20px 3px;
+  margin: 20px 0;
   height: calc(
     var(--lanes) * var(--bar-height) + (var(--lanes) - 1) * var(--bar-gap)
   );
@@ -166,11 +167,8 @@
   position: absolute;
   height: var(--bar-height);
   padding: 0 8px;
-  border: 2px solid var(--surface);
-  border-width: 0 2px;
   border-radius: 6px;
-  background: var(--bar);
-  background-clip: padding-box;
+  background: var(--sage);
   font-size: 14px;
   line-height: var(--bar-height);
   white-space: nowrap;
@@ -178,7 +176,7 @@
   text-overflow: ellipsis;
 }
 .screen .roadmap-bar:hover {
-  background-color: var(--sage);
+  background-color: #dce6dc;
   color: var(--green);
 }
 
@@ -215,7 +213,8 @@
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface);
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 500;
 }
 .screen .quarter-tabs button.active {
   border-color: var(--green);
@@ -225,10 +224,10 @@
 .roadmap-search {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   height: 48px;
   margin-top: 16px;
-  padding: 0 4px 0 14px;
+  padding: 0 4px 0 16px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--surface);
@@ -263,18 +262,25 @@
 .quarter-list {
   margin-top: 16px;
 }
+/* Figma: name column 202px; each cell starts 12px in. */
 .quarter-list-head,
 .quarter-list li > button {
   display: grid;
-  grid-template-columns: 1fr 42%;
+  grid-template-columns: 202px 1fr;
   align-items: center;
-  gap: 8px;
   width: 100%;
-  padding: 0 12px;
+  padding: 0;
   text-align: left;
+}
+.quarter-list-head > *,
+.quarter-list li > button > * {
+  padding: 0 12px;
+  min-width: 0;
 }
 .quarter-list-head {
   height: 40px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
   background: var(--surface);
   font-size: 14px;
   font-weight: 500;
@@ -289,8 +295,7 @@
 }
 .screen .quarter-list li > button {
   min-height: 62px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding: 8px 0;
 }
 .quarter-book {
   font-size: 16px;
@@ -304,14 +309,15 @@
   line-height: 21px;
 }
 .screen .quarter-period small {
+  margin-top: 2px;
   color: var(--muted);
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 12px;
+  line-height: 18px;
 }
 .screen .quarter-more {
   display: block;
   min-height: 48px;
-  margin: 16px auto 0;
+  margin: 8px auto 0;
   padding: 0 12px;
   color: var(--muted);
 }
