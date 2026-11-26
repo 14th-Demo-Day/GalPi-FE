@@ -1,34 +1,38 @@
+/* Figma: header 354 × 72 at 50px from the top, 24px sides, 2px gap. */
 .connection-screen {
-  padding: 49px 18px 154px;
+  padding: 50px 24px 160px;
 }
 .screen .connection-header h1 {
-  font-size: 28px;
-  line-height: 40px;
+  font-size: 32px;
+  line-height: 46px;
 }
 .connection-header p {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 15px;
-  line-height: 18px;
+  font-size: 16px;
+  line-height: 24px;
 }
 .connection-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  margin-top: 15px;
+  margin-top: 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--surface);
+  /* Figma: the unselected tab shows the page background. */
+  background: var(--paper);
   overflow: hidden;
 }
+/* Figma: Editorial Note/UI/Action — 14px / 500 / 21px. */
 .screen .connection-tabs button {
-  min-height: 42px;
+  min-height: 44px;
   color: var(--muted);
   font-size: 14px;
+  font-weight: 500;
+  line-height: 21px;
 }
 .screen .connection-tabs button[aria-selected="true"] {
   background: var(--green);
   color: var(--surface);
-  font-weight: 500;
 }
 
 /* Fixed call to action above the bottom nav */
@@ -40,7 +44,7 @@
   transform: translateX(-50%);
   width: 100%;
   max-width: 402px;
-  padding: 9px 18px 12px;
+  padding: 12px 24px 16px;
   background: linear-gradient(transparent, var(--paper) 12px);
 }
 .screen .connection-cta .primary:disabled {
@@ -54,88 +58,100 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 92px;
+  margin-top: 100px;
   text-align: center;
 }
+.connection-empty .open-book {
+  width: 66px;
+  height: 54px;
+}
 .connection-empty.saved-empty {
-  margin-top: 108px;
+  margin-top: 140px;
 }
 .screen .connection-empty h2 {
-  margin-top: 31px;
+  margin-top: 32px;
   font-family: "Noto Serif KR Variable", serif;
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 500;
-  line-height: 28px;
+  line-height: 36px;
 }
 .connection-empty.saved-empty h2 {
   margin-top: 0;
 }
 .screen .connection-empty p {
-  margin-top: 12px;
+  margin-top: 16px;
   color: var(--muted);
-  font-size: 14px;
-  line-height: 18px;
+  font-size: 15px;
+  line-height: 21px;
 }
 .connection-guide {
-  margin-top: 68px;
-  padding: 15px 12px;
+  margin-top: 72px;
+  padding: 16px;
   border-radius: 8px;
   background: var(--sage);
   text-align: center;
 }
 .connection-guide strong {
   color: var(--green);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
+  line-height: 24px;
 }
 .screen .connection-guide p {
-  margin-top: 8px;
-  font-size: 14px;
-  line-height: 19px;
+  margin-top: 6px;
+  font-size: 15px;
+  line-height: 21px;
 }
 
 /* Ready banner and selection */
 .connection-ready {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 16px;
+  min-height: 74px;
   margin-top: 18px;
-  padding: 17px 18px;
+  padding: 14px 18px;
   border-radius: 8px;
   background: var(--sage);
 }
 .connection-ready .open-book {
   flex-shrink: 0;
+  width: 33px;
+  height: 29px;
 }
+/* Figma: Editorial Note/UI/Action — 14px / 500 / 21px, var(--ink). */
 .connection-ready strong {
-  font-size: 15px;
+  display: block;
+  color: var(--ink);
+  font-size: 14px;
   font-weight: 500;
-  line-height: 18px;
+  line-height: 21px;
 }
 .screen .connection-ready p {
-  margin-top: 6px;
+  margin-top: 4px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 20px;
 }
 .connection-select-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 22px;
+  margin-top: 18px;
 }
 .screen .connection-select-head h2 {
-  font-size: 15px;
-  line-height: 23px;
+  font-size: 18px;
+  line-height: 27px;
 }
 .connection-select-head span {
   color: var(--green);
-  font-size: 14px;
+  font-size: 15px;
 }
 .connection-books {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 9px 0 0;
+  margin: 12px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -144,8 +160,8 @@
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 111px;
-  padding: 8px 12px 8px 12px;
+  min-height: 110px;
+  padding: 6px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
@@ -159,6 +175,8 @@
 }
 .connection-book .check-mark {
   flex-shrink: 0;
+  width: 26px;
+  height: 26px;
   margin-left: auto;
 }
 .mini-cover {
@@ -211,25 +229,26 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
 }
 .connection-book-info strong {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
-  line-height: 21px;
+  line-height: 24px;
   overflow-wrap: anywhere;
 }
 .ready-pill {
-  padding: 4px 14px;
+  padding: 2px 12px;
   border-radius: 999px;
   background: var(--sage);
   color: var(--green);
-  font-size: 12px;
-  line-height: 17px;
+  font-size: 13px;
+  line-height: 18px;
 }
+/* Selection screen (02): 13px / 18px guidance under the book list. */
 .connection-note {
-  margin-top: 31px;
+  margin-top: 28px;
   color: var(--muted);
   font-size: 13px;
   line-height: 18px;
@@ -237,24 +256,30 @@
 .screen .connection-note p + p {
   margin-top: 18px;
 }
+/* Shortage screen (예외 01): 14px / 400 / 21px, var(--muted), 354px wide. */
+.connection-shortage ~ .connection-note {
+  margin-top: 32px;
+  font-size: 14px;
+  line-height: 21px;
+}
 .connection-shortage {
-  margin-top: 43px;
+  margin-top: 32px;
 }
 .screen .connection-shortage h2 {
-  font-size: 17px;
-  line-height: 25px;
+  font-size: 18px;
+  line-height: 27px;
 }
 .screen .connection-shortage p {
-  margin-top: 12px;
+  margin-top: 8px;
   color: var(--muted);
   font-size: 14px;
-  line-height: 20px;
+  line-height: 21px;
 }
 .connection-shortage + .connection-books {
-  margin-top: 43px;
+  margin-top: 48px;
 }
 .connection-shortage ~ .connection-note p + p {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 /* Saved sentences */
@@ -339,7 +364,7 @@
 .connection-sub {
   display: flex;
   flex-direction: column;
-  padding: 12px 18px 31px;
+  padding: 12px 24px 32px;
 }
 .connection-sub.with-action {
   padding-bottom: 108px;
@@ -374,7 +399,7 @@
   width: 100%;
   max-width: 402px;
   gap: 8px;
-  padding: 12px 18px max(25px, env(safe-area-inset-bottom));
+  padding: 12px 24px max(24px, env(safe-area-inset-bottom));
   background: linear-gradient(transparent, var(--paper) 12px);
 }
 .screen .connect-actions .secondary {

@@ -532,11 +532,7 @@ function ConnectTab({
           <br />
           각각 20자 이상 작성해주세요.
         </p>
-        <p>
-          선택한 책의 기록만 연결에 사용해요.
-          <br />
-          한 번에 {MIN_BOOKS}~{MAX_BOOKS}권까지 연결할 수 있어요.
-        </p>
+        <p>선택한 책의 기록만 연결에 사용해요.</p>
       </div>
       <div className="connection-cta">
         <button

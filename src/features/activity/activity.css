@@ -327,6 +327,14 @@
 .bottom-nav button[aria-current] {
   color: var(--green);
 }
+.nav-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  background: currentColor;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
 .bottom-nav button:disabled {
   opacity: 1;
 }

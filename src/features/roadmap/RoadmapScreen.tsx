@@ -36,6 +36,7 @@ import "./roadmap.css";
 
 type Tab = "roadmap" | "activity" | "connections";
 const PAGE_SIZE = 5;
+const BAR_INSET = 4;
 
 // Annual: GET /api/roadmap?year=. Quarterly: GET /api/roadmap/quarter.
 // Years: GET /api/roadmap/years. Detail: GET /api/roadmap/books/{id}.
@@ -283,8 +284,9 @@ function AnnualView({
                   key={bar.bookId}
                   className="roadmap-bar"
                   style={{
-                    left: `${left}%`,
-                    width: `${width}%`,
+                    // Figma: 4px from the cell edge, so 8px between bars.
+                    left: `calc(${left}% + ${BAR_INSET}px)`,
+                    width: `calc(${width}% - ${BAR_INSET * 2}px)`,
                     top: `calc(${bar.lane} * (var(--bar-height) + var(--bar-gap)))`,
                   }}
                   title={bar.title}
