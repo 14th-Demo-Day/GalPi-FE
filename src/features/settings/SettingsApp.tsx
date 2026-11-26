@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { ApiError } from "../activity/api";
 import { go, registerNavigationGuard } from "../activity/navigation";
 import { ErrorMessage, Icon, IconButton, Modal } from "../activity/ui";
 import { PasswordField } from "../onboarding/fields";
-import { validatePassword, WRONG_PASSWORD } from "./settings";
-import type { PasswordErrors, PasswordInput, SettingsApi } from "./settings";
+import { passwordFieldError, validatePassword } from "./settings";
+import type {
+  Me,
+  PasswordErrors,
+  PasswordInput,
+  SettingsApi,
+} from "./settings";
 import "../activity/activity.css";
 import "../onboarding/onboarding.css";
 import "./settings.css";
@@ -71,18 +75,43 @@ function SettingsHome({
   onBack: () => void;
 }) {
   const [checking, setChecking] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  // Show the session's login id right away, then the server's.
+  const [me, setMe] = useState<Me | null>(null);
+  useEffect(() => {
+    const c = new AbortController();
+    api
+      .me(c.signal)
+      .then((m) => {
+        if (!c.signal.aborted) setMe(m);
+      })
+      .catch(() => {});
+    return () => c.abort();
+  }, [api]);
 
   async function askReset() {
     if (checking) return;
     setChecking(true);
     setError(null);
     try {
-      setDialog((await api.hasRecords()) ? "reset-confirm" : "reset-empty");
+      const fresh = await api.me();
+      setMe(fresh);
+      setDialog(fresh.hasRecords ? "reset-confirm" : "reset-empty");
     } catch (e) {
       setError(e);
     } finally {
       setChecking(false);
+    }
+  }
+  async function logout() {
+    setLoggingOut(true);
+    try {
+      await api.logout();
+    } catch {
+      // Sign out locally even if the server call fails (offline, expired token).
+    } finally {
+      onLogout();
     }
   }
   async function reset() {
@@ -90,6 +119,7 @@ function SettingsHome({
     setError(null);
     try {
       await api.resetRecords();
+      setMe((m) => m && { ...m, hasRecords: false });
       setDialog("reset-done");
     } catch (e) {
       setError(e);
@@ -107,7 +137,7 @@ function SettingsHome({
       <h2 className="settings-section">계정</h2>
       <div className="settings-account">
         <strong>내 아이디</strong>
-        <span>{loginId || "—"}</span>
+        <span>{me?.loginId || loginId || "—"}</span>
       </div>
       <button
         type="button"
@@ -139,7 +169,9 @@ function SettingsHome({
       {dialog === "logout" && (
         <SettingsDialog
           title="로그아웃할까요?"
-          onClose={close}
+          onClose={() => {
+            if (!loggingOut) close();
+          }}
           body={
             <>
               저장한 기록은 그대로 유지돼요.
@@ -149,11 +181,21 @@ function SettingsHome({
           }
           actions={
             <div className="confirm-actions">
-              <button type="button" className="soft" onClick={close}>
+              <button
+                type="button"
+                className="soft"
+                disabled={loggingOut}
+                onClick={close}
+              >
                 취소
               </button>
-              <button type="button" className="primary" onClick={onLogout}>
-                로그아웃
+              <button
+                type="button"
+                className="primary"
+                disabled={loggingOut}
+                onClick={logout}
+              >
+                {loggingOut ? "로그아웃 중…" : "로그아웃"}
               </button>
             </div>
           }
@@ -314,13 +356,14 @@ function PasswordScreen({
       await api.changePassword({
         currentPassword: input.current,
         newPassword: input.next,
+        newPasswordConfirm: input.confirm,
       });
       // The guard is off while busy, so this leaves without the cancel prompt.
       onDone();
     } catch (err) {
       setBusy(false);
-      if (err instanceof ApiError && err.code === WRONG_PASSWORD)
-        setErrors({ current: err.message });
+      const field = passwordFieldError(err);
+      if (field) setErrors(field);
       else setFailure(err);
     }
   }
